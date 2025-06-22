@@ -4,6 +4,7 @@ import axios from "axios";
 const Debug = () => {
   const [cloudinaryTest, setCloudinaryTest] = useState(null);
   const [envTest, setEnvTest] = useState(null);
+  const [matchingTest, setMatchingTest] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
@@ -38,11 +39,26 @@ const Debug = () => {
     }
   };
 
+  const testMatching = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/debug/matching`);
+      setMatchingTest(response.data);
+    } catch (error) {
+      setMatchingTest({
+        success: false,
+        error: error.response?.data || error.message,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className='max-w-4xl mx-auto p-6'>
+    <div className='max-w-6xl mx-auto p-6'>
       <h2 className='text-2xl font-bold mb-6'>Debug Dashboard</h2>
 
-      <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+      <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
         {/* Environment Variables Test */}
         <div className='bg-white rounded-lg shadow p-6'>
           <h3 className='text-lg font-semibold mb-4'>Environment Variables</h3>
@@ -85,6 +101,33 @@ const Debug = () => {
               </div>
               <pre className='text-sm overflow-auto'>
                 {JSON.stringify(cloudinaryTest, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+
+        {/* Matching System Test */}
+        <div className='bg-white rounded-lg shadow p-6'>
+          <h3 className='text-lg font-semibold mb-4'>Matching System</h3>
+          <button
+            onClick={testMatching}
+            disabled={loading}
+            className='bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 disabled:opacity-50 mb-4'
+          >
+            {loading ? "Testing..." : "Test Matching"}
+          </button>
+
+          {matchingTest && (
+            <div className='bg-gray-50 p-4 rounded'>
+              <div
+                className={`mb-2 font-semibold ${
+                  matchingTest.success ? "text-green-600" : "text-red-600"
+                }`}
+              >
+                {matchingTest.success ? "SUCCESS" : "FAILED"}
+              </div>
+              <pre className='text-sm overflow-auto'>
+                {JSON.stringify(matchingTest, null, 2)}
               </pre>
             </div>
           )}
@@ -149,6 +192,48 @@ const Debug = () => {
             {loading ? "Uploading..." : "Test Upload"}
           </button>
         </form>
+      </div>
+
+      {/* API Tests */}
+      <div className='bg-white rounded-lg shadow p-6 mt-6'>
+        <h3 className='text-lg font-semibold mb-4'>API Endpoint Tests</h3>
+        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+          <button
+            onClick={async () => {
+              try {
+                const response = await axios.get(`${API_URL}/matching/stats`);
+                alert(
+                  "Stats API working: " + JSON.stringify(response.data.stats)
+                );
+              } catch (error) {
+                alert("Stats API failed: " + error.message);
+              }
+            }}
+            className='bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600'
+          >
+            Test Stats API
+          </button>
+
+          <button
+            onClick={async () => {
+              try {
+                const response = await axios.get(
+                  `${API_URL}/matching/discover`
+                );
+                alert(
+                  "Discovery API working: Found " +
+                    response.data.users.length +
+                    " users"
+                );
+              } catch (error) {
+                alert("Discovery API failed: " + error.message);
+              }
+            }}
+            className='bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600'
+          >
+            Test Discovery API
+          </button>
+        </div>
       </div>
     </div>
   );
