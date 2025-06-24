@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useChat } from "../../context/ChatContext";
 
 const MatchModal = ({ match, onClose }) => {
   const { user } = useAuth();
+  const { setCurrentConversation } = useChat();
+  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
 
   // Animation trigger
@@ -14,6 +18,21 @@ const MatchModal = ({ match, onClose }) => {
   const handleClose = () => {
     setShowModal(false);
     setTimeout(onClose, 300); // Wait for animation to complete
+  };
+
+  const handleStartChatting = () => {
+    // Create conversation object for chat
+    const conversation = {
+      matchId: match._id,
+      user: match.otherUser,
+      lastMessage: null,
+      unreadCount: 0,
+      matchedAt: match.matchedAt,
+    };
+
+    setCurrentConversation(conversation);
+    navigate("/chat");
+    handleClose();
   };
 
   if (!match) return null;
@@ -120,7 +139,7 @@ const MatchModal = ({ match, onClose }) => {
           {/* Action Buttons */}
           <div className='space-y-3'>
             <button
-              onClick={handleClose}
+              onClick={handleStartChatting}
               className='w-full bg-white text-pink-600 font-semibold py-3 px-6 rounded-xl hover:bg-gray-100 transition-colors duration-200 shadow-lg'
             >
               Start Chatting

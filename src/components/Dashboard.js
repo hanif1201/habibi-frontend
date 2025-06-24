@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useChat } from "../context/ChatContext";
+import { useNavigate } from "react-router-dom";
 import ProfileCompletion from "./Profile/ProfileCompletion";
 import ProfileEdit from "./Profile/ProfileEdit";
 import PhotoUpload from "./Profile/PhotoUpload";
@@ -10,6 +12,8 @@ import axios from "axios";
 
 const Dashboard = () => {
   const { user, logout, loadUser } = useAuth();
+  const { unreadCount } = useChat();
+  const navigate = useNavigate();
   const [profileCompletion, setProfileCompletion] = useState(null);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [showPhotoUpload, setShowPhotoUpload] = useState(false);
@@ -124,6 +128,31 @@ const Dashboard = () => {
 
             {/* User Menu */}
             <div className='flex items-center space-x-4'>
+              {/* Chat Link */}
+              <button
+                onClick={() => navigate("/chat")}
+                className='relative p-2 text-gray-600 hover:text-pink-600 transition-colors'
+              >
+                <svg
+                  className='w-6 h-6'
+                  fill='none'
+                  stroke='currentColor'
+                  viewBox='0 0 24 24'
+                >
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth={2}
+                    d='M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z'
+                  />
+                </svg>
+                {unreadCount > 0 && (
+                  <div className='absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium'>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </div>
+                )}
+              </button>
+
               <span className='text-gray-700'>Welcome, {user?.firstName}!</span>
               <button
                 onClick={handleLogout}
@@ -572,8 +601,8 @@ const Dashboard = () => {
               <span className='text-sm font-medium text-gray-700'>
                 Phase 4: Real-time Chat
               </span>
-              <span className='bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded-full'>
-                🚧 Next
+              <span className='bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full'>
+                ✅ Complete
               </span>
             </div>
           </div>

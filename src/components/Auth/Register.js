@@ -28,7 +28,7 @@ const Register = () => {
   // Clear error when component mounts
   useEffect(() => {
     clearError();
-  }, [clearError]);
+  }, []); // Only run on mount
 
   const handleChange = (e) => {
     setFormData({

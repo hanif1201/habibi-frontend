@@ -22,7 +22,7 @@ const Login = () => {
   // Clear error when component mounts or unmounts
   useEffect(() => {
     clearError();
-  }, [clearError]);
+  }, []); // Only run on mount
 
   const handleChange = (e) => {
     setFormData({
