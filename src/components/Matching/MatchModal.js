@@ -35,6 +35,19 @@ const MatchModal = ({ match, onClose }) => {
     handleClose();
   };
 
+  const handleKeepSwiping = () => {
+    // Close modal and stay on discovery page
+    handleClose();
+  };
+
+  const handleViewProfile = () => {
+    // You can implement a profile view modal here
+    // For now, we'll just show an alert
+    alert(
+      `View ${match.otherUser.firstName}'s full profile - Feature coming soon!`
+    );
+  };
+
   if (!match) return null;
 
   const otherUser = match.otherUser;
@@ -138,19 +151,50 @@ const MatchModal = ({ match, onClose }) => {
 
           {/* Action Buttons */}
           <div className='space-y-3'>
+            {/* Primary Action - Start Chatting */}
             <button
               onClick={handleStartChatting}
-              className='w-full bg-white text-pink-600 font-semibold py-3 px-6 rounded-xl hover:bg-gray-100 transition-colors duration-200 shadow-lg'
+              className='w-full bg-white text-pink-600 font-semibold py-3 px-6 rounded-xl hover:bg-gray-100 transition-colors duration-200 shadow-lg flex items-center justify-center'
             >
+              <svg
+                className='w-5 h-5 mr-2'
+                fill='none'
+                stroke='currentColor'
+                viewBox='0 0 24 24'
+              >
+                <path
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                  strokeWidth={2}
+                  d='M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z'
+                />
+              </svg>
               Start Chatting
             </button>
 
-            <button
-              onClick={handleClose}
-              className='w-full bg-transparent border-2 border-white text-white font-semibold py-3 px-6 rounded-xl hover:bg-white hover:text-pink-600 transition-all duration-200'
-            >
-              Keep Swiping
-            </button>
+            {/* Secondary Actions */}
+            <div className='grid grid-cols-2 gap-3'>
+              <button
+                onClick={handleViewProfile}
+                className='bg-transparent border-2 border-white text-white font-semibold py-2 px-4 rounded-xl hover:bg-white hover:text-pink-600 transition-all duration-200 text-sm'
+              >
+                View Profile
+              </button>
+
+              <button
+                onClick={handleKeepSwiping}
+                className='bg-transparent border-2 border-white text-white font-semibold py-2 px-4 rounded-xl hover:bg-white hover:text-pink-600 transition-all duration-200 text-sm'
+              >
+                Keep Swiping
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Tips */}
+          <div className='mt-6 text-center'>
+            <p className='text-sm opacity-80'>
+              💡 Start with a friendly message or ask about their interests!
+            </p>
           </div>
 
           {/* Close Button */}

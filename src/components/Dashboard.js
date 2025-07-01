@@ -12,7 +12,7 @@ import axios from "axios";
 
 const Dashboard = () => {
   const { user, logout, loadUser } = useAuth();
-  const { unreadCount } = useChat();
+  const { unreadCount, conversations } = useChat();
   const navigate = useNavigate();
   const [profileCompletion, setProfileCompletion] = useState(null);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
@@ -41,7 +41,6 @@ const Dashboard = () => {
           }
         } catch (statsError) {
           console.error("Error fetching stats (non-critical):", statsError);
-          // Set default stats if the endpoint fails
           setStats({
             likes: 0,
             passes: 0,
@@ -68,10 +67,7 @@ const Dashboard = () => {
   };
 
   const handleProfileUpdate = async (updatedUser) => {
-    // Reload user data to get updated profile
     await loadUser();
-
-    // Fetch updated profile completion
     try {
       const response = await axios.get(`${API_URL}/profile`);
       if (response.data.success) {
@@ -102,6 +98,31 @@ const Dashboard = () => {
     return user?.photos?.find((photo) => photo.isPrimary) || user?.photos?.[0];
   };
 
+  const getRecentConversations = () => {
+    return conversations
+      .filter((conv) => conv.lastMessage)
+      .sort(
+        (a, b) =>
+          new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt)
+      )
+      .slice(0, 3);
+  };
+
+  const formatMessageTime = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInMs = now - date;
+    const diffInMins = Math.floor(diffInMs / 60000);
+    const diffInHours = Math.floor(diffInMs / 3600000);
+    const diffInDays = Math.floor(diffInMs / 86400000);
+
+    if (diffInMins < 1) return "Just now";
+    if (diffInMins < 60) return `${diffInMins}m ago`;
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
   if (loading) {
     return (
       <div className='min-h-screen flex items-center justify-center bg-gray-50'>
@@ -119,19 +140,16 @@ const Dashboard = () => {
       <header className='bg-white shadow-sm border-b'>
         <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
           <div className='flex justify-between items-center h-16'>
-            {/* Logo */}
             <div className='flex items-center'>
               <h1 className='text-2xl font-bold bg-gradient-to-r from-pink-500 to-red-500 bg-clip-text text-transparent'>
                 Habibi
               </h1>
             </div>
 
-            {/* User Menu */}
             <div className='flex items-center space-x-4'>
-              {/* Chat Link */}
               <button
                 onClick={() => navigate("/chat")}
-                className='relative p-2 text-gray-600 hover:text-pink-600 transition-colors'
+                className='relative p-2 text-gray-600 hover:text-pink-600 transition-colors group'
               >
                 <svg
                   className='w-6 h-6'
@@ -147,10 +165,14 @@ const Dashboard = () => {
                   />
                 </svg>
                 {unreadCount > 0 && (
-                  <div className='absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium'>
+                  <div className='absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium animate-pulse'>
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </div>
                 )}
+
+                <div className='absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-800 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10'>
+                  {unreadCount > 0 ? `${unreadCount} new messages` : "Messages"}
+                </div>
               </button>
 
               <span className='text-gray-700'>Welcome, {user?.firstName}!</span>
@@ -176,6 +198,150 @@ const Dashboard = () => {
           />
         )}
 
+        {/* Quick Stats & Recent Activity */}
+        {stats && (stats.matches > 0 || conversations.length > 0) && (
+          <div className='bg-white rounded-xl shadow-sm border p-6 mb-6'>
+            <div className='flex justify-between items-center mb-4'>
+              <h3 className='text-lg font-semibold text-gray-900'>
+                Quick Overview
+              </h3>
+              <button
+                onClick={() => navigate("/chat")}
+                className='text-pink-600 hover:text-pink-700 font-medium text-sm flex items-center'
+              >
+                View All Messages
+                <svg
+                  className='w-4 h-4 ml-1'
+                  fill='none'
+                  stroke='currentColor'
+                  viewBox='0 0 24 24'
+                >
+                  <path
+                    strokeLinecap='round'
+                    strokeLinejoin='round'
+                    strokeWidth={2}
+                    d='M9 5l7 7-7 7'
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <div className='grid grid-cols-1 md:grid-cols-2 gap-6'>
+              {/* Stats Summary */}
+              <div>
+                <h4 className='text-sm font-medium text-gray-700 mb-3'>
+                  Your Activity
+                </h4>
+                <div className='grid grid-cols-2 gap-4'>
+                  <div className='text-center p-3 bg-pink-50 rounded-lg hover:bg-pink-100 transition-colors'>
+                    <div className='text-2xl font-bold text-pink-600'>
+                      {stats.matches}
+                    </div>
+                    <div className='text-sm text-gray-600'>Matches</div>
+                  </div>
+                  <div className='text-center p-3 bg-green-50 rounded-lg hover:bg-green-100 transition-colors'>
+                    <div className='text-2xl font-bold text-green-600'>
+                      {stats.likesReceived}
+                    </div>
+                    <div className='text-sm text-gray-600'>Likes Received</div>
+                  </div>
+                </div>
+                {unreadCount > 0 && (
+                  <div className='mt-3 p-3 bg-red-50 rounded-lg border border-red-200'>
+                    <div className='flex items-center justify-between'>
+                      <div>
+                        <div className='text-lg font-bold text-red-600'>
+                          {unreadCount}
+                        </div>
+                        <div className='text-sm text-red-700'>
+                          Unread Messages
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => navigate("/chat")}
+                        className='bg-red-500 text-white px-3 py-1 rounded-full text-xs font-medium hover:bg-red-600 transition-colors'
+                      >
+                        View
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Recent Conversations */}
+              <div>
+                <h4 className='text-sm font-medium text-gray-700 mb-3'>
+                  Recent Conversations
+                </h4>
+                {getRecentConversations().length > 0 ? (
+                  <div className='space-y-2'>
+                    {getRecentConversations().map((conv) => (
+                      <div
+                        key={conv.matchId}
+                        onClick={() => navigate("/chat")}
+                        className='flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-gray-100'
+                      >
+                        <div className='relative'>
+                          {conv.user.primaryPhoto ? (
+                            <img
+                              src={conv.user.primaryPhoto.url}
+                              alt={conv.user.firstName}
+                              className='w-10 h-10 rounded-full object-cover'
+                            />
+                          ) : (
+                            <div className='w-10 h-10 rounded-full bg-gradient-to-r from-pink-500 to-red-500 flex items-center justify-center text-white text-sm font-semibold'>
+                              {conv.user.firstName.charAt(0)}
+                            </div>
+                          )}
+                          {conv.unreadCount > 0 && (
+                            <div className='absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium'>
+                              {conv.unreadCount > 9 ? "9+" : conv.unreadCount}
+                            </div>
+                          )}
+                        </div>
+                        <div className='flex-1 min-w-0'>
+                          <div className='flex items-center justify-between'>
+                            <div className='text-sm font-medium text-gray-900 truncate'>
+                              {conv.user.firstName}
+                            </div>
+                            <div className='text-xs text-gray-500'>
+                              {formatMessageTime(conv.lastMessage.createdAt)}
+                            </div>
+                          </div>
+                          <div className='text-xs text-gray-500 truncate'>
+                            {conv.lastMessage.isFromMe && "You: "}
+                            {conv.lastMessage.content}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className='text-center py-6 text-gray-500 text-sm bg-gray-50 rounded-lg'>
+                    <svg
+                      className='w-8 h-8 mx-auto mb-2 text-gray-400'
+                      fill='none'
+                      stroke='currentColor'
+                      viewBox='0 0 24 24'
+                    >
+                      <path
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        strokeWidth={2}
+                        d='M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z'
+                      />
+                    </svg>
+                    No recent conversations
+                    <div className='text-xs text-gray-400 mt-1'>
+                      Start matching to begin chatting!
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Tab Navigation */}
         <div className='bg-white rounded-xl shadow-sm border mb-6'>
           <div className='border-b border-gray-200'>
@@ -192,13 +358,18 @@ const Dashboard = () => {
               </button>
               <button
                 onClick={() => setActiveTab("matches")}
-                className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors ${
+                className={`py-4 px-6 text-sm font-medium border-b-2 transition-colors relative ${
                   activeTab === "matches"
                     ? "border-pink-500 text-pink-600"
                     : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
                 Matches ({stats?.matches || 0})
+                {unreadCount > 0 && (
+                  <div className='absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium'>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </div>
+                )}
               </button>
               <button
                 onClick={() => setActiveTab("photos")}
@@ -306,7 +477,6 @@ const Dashboard = () => {
                 <div className='lg:col-span-1'>
                   <div className='bg-gradient-to-br from-pink-50 to-red-50 rounded-xl p-6 border'>
                     <div className='text-center'>
-                      {/* Profile Picture */}
                       <div className='relative w-24 h-24 mx-auto mb-4'>
                         {getPrimaryPhoto() ? (
                           <img
@@ -323,7 +493,6 @@ const Dashboard = () => {
                           </div>
                         )}
 
-                        {/* Edit button */}
                         <button
                           onClick={() => setShowPhotoUpload(true)}
                           className='absolute -bottom-1 -right-1 bg-pink-500 text-white rounded-full p-2 hover:bg-pink-600 transition-colors shadow-lg'
@@ -344,7 +513,6 @@ const Dashboard = () => {
                         </button>
                       </div>
 
-                      {/* User Info */}
                       <h2 className='text-xl font-semibold text-gray-900 mb-1'>
                         {user?.firstName} {user?.lastName}
                       </h2>
@@ -355,7 +523,6 @@ const Dashboard = () => {
                         {user?.gender}
                       </p>
 
-                      {/* Bio */}
                       <div className='text-left'>
                         <h3 className='text-sm font-medium text-gray-900 mb-2'>
                           Bio
@@ -366,7 +533,6 @@ const Dashboard = () => {
                         </p>
                       </div>
 
-                      {/* Edit Profile Button */}
                       <button
                         onClick={() => setShowProfileEdit(true)}
                         className='mt-4 w-full bg-pink-500 hover:bg-pink-600 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors duration-200'
@@ -550,7 +716,7 @@ const Dashboard = () => {
                           Status:
                         </span>
                         <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ml-2 ${
                             user?.isVerified
                               ? "bg-green-100 text-green-800"
                               : "bg-yellow-100 text-yellow-800"
@@ -568,63 +734,22 @@ const Dashboard = () => {
         </div>
 
         {/* Development Progress */}
-        <div className='bg-white rounded-xl shadow-sm p-6 border'>
+        <div className='bg-white rounded-xl shadow-sm border p-6 mt-6'>
           <h3 className='text-lg font-semibold text-gray-900 mb-4'>
             Development Progress
           </h3>
           <div className='space-y-4'>
-            <div className='flex items-center justify-between'>
-              <span className='text-sm font-medium text-gray-700'>
-                Phase 1: Authentication
-              </span>
-              <span className='bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full'>
-                ✅ Complete
-              </span>
+            <div className='flex justify-between'>
+              <span className='text-gray-600'>Total Users:</span>
+              <span className='font-semibold'>{stats?.total || 0}</span>
             </div>
-            <div className='flex items-center justify-between'>
-              <span className='text-sm font-medium text-gray-700'>
-                Phase 2: User Profiles
-              </span>
-              <span className='bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full'>
-                ✅ Complete
-              </span>
-            </div>
-            <div className='flex items-center justify-between'>
-              <span className='text-sm font-medium text-gray-700'>
-                Phase 3: Matching System
-              </span>
-              <span className='bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full'>
-                ✅ Complete
-              </span>
-            </div>
-            <div className='flex items-center justify-between'>
-              <span className='text-sm font-medium text-gray-700'>
-                Phase 4: Real-time Chat
-              </span>
-              <span className='bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full'>
-                ✅ Complete
-              </span>
+            <div className='flex justify-between'>
+              <span className='text-gray-600'>Total Matches:</span>
+              <span className='font-semibold'>{stats?.matches || 0}</span>
             </div>
           </div>
         </div>
       </main>
-
-      {/* Modals */}
-      {showProfileEdit && (
-        <ProfileEdit
-          user={user}
-          onProfileUpdate={handleProfileUpdate}
-          onClose={() => setShowProfileEdit(false)}
-        />
-      )}
-
-      {showPhotoUpload && (
-        <PhotoUpload
-          user={user}
-          onPhotosUpdate={handleProfileUpdate}
-          onClose={() => setShowPhotoUpload(false)}
-        />
-      )}
     </div>
   );
 };

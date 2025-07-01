@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { useChat } from "../../context/ChatContext";
 
 const MatchesList = () => {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { setCurrentConversation, conversations } = useChat();
+  const navigate = useNavigate();
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
@@ -28,10 +32,35 @@ const MatchesList = () => {
     }
   };
 
+  const handleStartChat = (match) => {
+    // Create conversation object for chat
+    const conversation = {
+      matchId: match._id,
+      user: match.user,
+      lastMessage: null,
+      unreadCount: 0,
+      matchedAt: match.matchedAt,
+    };
+
+    // Check if conversation exists in current conversations
+    const existingConversation = conversations.find(
+      (conv) => conv.matchId === match._id
+    );
+
+    if (existingConversation) {
+      setCurrentConversation(existingConversation);
+    } else {
+      setCurrentConversation(conversation);
+    }
+
+    // Navigate to chat
+    navigate("/chat");
+  };
+
   const handleUnmatch = async (matchId) => {
     if (
       !window.confirm(
-        "Are you sure you want to unmatch? This action cannot be undone."
+        "Are you sure you want to unmatch? This action cannot be undone and will delete all your messages."
       )
     ) {
       return;
@@ -49,6 +78,16 @@ const MatchesList = () => {
       console.error("Error unmatching:", error);
       setError("Failed to unmatch");
     }
+  };
+
+  const getLastMessage = (matchId) => {
+    const conversation = conversations.find((conv) => conv.matchId === matchId);
+    return conversation?.lastMessage;
+  };
+
+  const getUnreadCount = (matchId) => {
+    const conversation = conversations.find((conv) => conv.matchId === matchId);
+    return conversation?.unreadCount || 0;
   };
 
   const formatDate = (dateString) => {
@@ -134,46 +173,51 @@ const MatchesList = () => {
       </div>
 
       <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
-        {matches.map((match) => (
-          <div
-            key={match._id}
-            className='bg-white rounded-xl shadow-sm border hover:shadow-md transition-shadow'
-          >
-            {/* User Photo */}
-            <div className='relative'>
-              {match.user.primaryPhoto ? (
-                <img
-                  src={match.user.primaryPhoto.url}
-                  alt={match.user.firstName}
-                  className='w-full h-48 object-cover rounded-t-xl'
-                />
-              ) : (
-                <div className='w-full h-48 bg-gradient-to-br from-pink-500 to-red-500 rounded-t-xl flex items-center justify-center'>
-                  <span className='text-4xl font-bold text-white'>
-                    {match.user.firstName.charAt(0)}
-                  </span>
+        {matches.map((match) => {
+          const lastMessage = getLastMessage(match._id);
+          const unreadCount = getUnreadCount(match._id);
+
+          return (
+            <div
+              key={match._id}
+              className='bg-white rounded-xl shadow-sm border hover:shadow-md transition-shadow'
+            >
+              {/* User Photo */}
+              <div className='relative'>
+                {match.user.primaryPhoto ? (
+                  <img
+                    src={match.user.primaryPhoto.url}
+                    alt={match.user.firstName}
+                    className='w-full h-48 object-cover rounded-t-xl'
+                  />
+                ) : (
+                  <div className='w-full h-48 bg-gradient-to-br from-pink-500 to-red-500 rounded-t-xl flex items-center justify-center'>
+                    <span className='text-4xl font-bold text-white'>
+                      {match.user.firstName.charAt(0)}
+                    </span>
+                  </div>
+                )}
+
+                {/* Match Date Badge */}
+                <div className='absolute top-3 left-3 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium'>
+                  Matched {formatDate(match.matchedAt)}
                 </div>
-              )}
 
-              {/* Match Date Badge */}
-              <div className='absolute top-3 left-3 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium'>
-                Matched {formatDate(match.matchedAt)}
-              </div>
-            </div>
+                {/* Unread Messages Badge */}
+                {unreadCount > 0 && (
+                  <div className='absolute top-3 right-3 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-medium min-w-[20px] text-center'>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </div>
+                )}
 
-            {/* User Info */}
-            <div className='p-4'>
-              <div className='flex justify-between items-start mb-2'>
-                <h3 className='text-lg font-semibold text-gray-900'>
-                  {match.user.firstName}, {match.user.age}
-                </h3>
+                {/* Unmatch Button */}
                 <button
                   onClick={() => handleUnmatch(match._id)}
-                  className='text-gray-400 hover:text-red-500 transition-colors'
+                  className='absolute top-3 right-3 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100'
                   title='Unmatch'
                 >
                   <svg
-                    className='w-5 h-5'
+                    className='w-3 h-3'
                     fill='none'
                     stroke='currentColor'
                     viewBox='0 0 24 24'
@@ -188,41 +232,86 @@ const MatchesList = () => {
                 </button>
               </div>
 
-              {match.user.bio && (
-                <p className='text-gray-600 text-sm mb-3 line-clamp-2'>
-                  {match.user.bio}
-                </p>
-              )}
+              {/* User Info */}
+              <div className='p-4'>
+                <div className='flex justify-between items-start mb-2'>
+                  <h3 className='text-lg font-semibold text-gray-900'>
+                    {match.user.firstName}, {match.user.age}
+                  </h3>
+                </div>
 
-              {/* Action Buttons */}
-              <div className='flex space-x-2'>
-                <button className='flex-1 bg-gradient-to-r from-pink-500 to-red-500 text-white py-2 px-4 rounded-lg hover:from-pink-600 hover:to-red-600 transition-all duration-200 text-sm font-medium'>
-                  Send Message
-                </button>
-                <button className='px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors'>
-                  <svg
-                    className='w-4 h-4 text-gray-600'
-                    fill='none'
-                    stroke='currentColor'
-                    viewBox='0 0 24 24'
+                {match.user.bio && (
+                  <p className='text-gray-600 text-sm mb-3 line-clamp-2'>
+                    {match.user.bio}
+                  </p>
+                )}
+
+                {/* Last Message Preview */}
+                {lastMessage && (
+                  <div className='bg-gray-50 rounded-lg p-3 mb-3'>
+                    <p className='text-sm text-gray-700 line-clamp-2'>
+                      {lastMessage.isFromMe && (
+                        <span className='font-medium'>You: </span>
+                      )}
+                      {lastMessage.content}
+                    </p>
+                    <p className='text-xs text-gray-500 mt-1'>
+                      {formatDate(lastMessage.createdAt)}
+                    </p>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className='flex space-x-2'>
+                  <button
+                    onClick={() => handleStartChat(match)}
+                    className='flex-1 bg-gradient-to-r from-pink-500 to-red-500 text-white py-2 px-4 rounded-lg hover:from-pink-600 hover:to-red-600 transition-all duration-200 text-sm font-medium flex items-center justify-center'
                   >
-                    <path
-                      strokeLinecap='round'
-                      strokeLinejoin='round'
-                      strokeWidth={2}
-                      d='M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
-                    />
-                  </svg>
-                </button>
-              </div>
+                    <svg
+                      className='w-4 h-4 mr-2'
+                      fill='none'
+                      stroke='currentColor'
+                      viewBox='0 0 24 24'
+                    >
+                      <path
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        strokeWidth={2}
+                        d='M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z'
+                      />
+                    </svg>
+                    {lastMessage ? "Continue Chat" : "Start Chat"}
+                  </button>
 
-              {/* Last Activity */}
-              <div className='mt-3 text-xs text-gray-500 text-center'>
-                Last activity: {formatDate(match.lastActivity)}
+                  <button
+                    onClick={() => handleUnmatch(match._id)}
+                    className='px-3 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-sm'
+                    title='Unmatch'
+                  >
+                    <svg
+                      className='w-4 h-4'
+                      fill='none'
+                      stroke='currentColor'
+                      viewBox='0 0 24 24'
+                    >
+                      <path
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        strokeWidth={2}
+                        d='M6 18L18 6M6 6l12 12'
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Last Activity */}
+                <div className='mt-3 text-xs text-gray-500 text-center'>
+                  Last activity: {formatDate(match.lastActivity)}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
