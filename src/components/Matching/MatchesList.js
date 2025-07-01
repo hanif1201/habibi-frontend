@@ -2,11 +2,14 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useChat } from "../../context/ChatContext";
+import FirstMessagePrompt from "./FirstMessagePrompt";
 
 const MatchesList = () => {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showFirstMessagePrompt, setShowFirstMessagePrompt] = useState(false);
+  const [selectedMatch, setSelectedMatch] = useState(null);
   const { setCurrentConversation, conversations } = useChat();
   const navigate = useNavigate();
 
@@ -22,7 +25,20 @@ const MatchesList = () => {
       const response = await axios.get(`${API_URL}/matching/matches`);
 
       if (response.data.success) {
-        setMatches(response.data.matches);
+        // Sort matches to show newest first, then prioritize those without messages
+        const sortedMatches = response.data.matches.sort((a, b) => {
+          const aHasMessages = hasConversation(a._id);
+          const bHasMessages = hasConversation(b._id);
+
+          // If one has messages and other doesn't, prioritize the one without
+          if (aHasMessages && !bHasMessages) return 1;
+          if (!aHasMessages && bHasMessages) return -1;
+
+          // Otherwise sort by match date (newest first)
+          return new Date(b.matchedAt) - new Date(a.matchedAt);
+        });
+
+        setMatches(sortedMatches);
       }
     } catch (error) {
       console.error("Error loading matches:", error);
@@ -32,29 +48,46 @@ const MatchesList = () => {
     }
   };
 
-  const handleStartChat = (match) => {
-    // Create conversation object for chat
-    const conversation = {
-      matchId: match._id,
-      user: match.user,
-      lastMessage: null,
-      unreadCount: 0,
-      matchedAt: match.matchedAt,
-    };
+  const hasConversation = (matchId) => {
+    const conversation = conversations.find((conv) => conv.matchId === matchId);
+    return conversation && conversation.lastMessage;
+  };
 
-    // Check if conversation exists in current conversations
-    const existingConversation = conversations.find(
+  const handleStartChat = (match) => {
+    const conversation = conversations.find(
       (conv) => conv.matchId === match._id
     );
 
-    if (existingConversation) {
-      setCurrentConversation(existingConversation);
-    } else {
+    if (conversation && conversation.lastMessage) {
+      // Existing conversation - go directly to chat
       setCurrentConversation(conversation);
+      navigate("/chat");
+    } else {
+      // New match - show first message prompt
+      setSelectedMatch(match);
+      setShowFirstMessagePrompt(true);
     }
+  };
 
-    // Navigate to chat
+  const handleFirstMessageSent = (messageContent) => {
+    // Update the match to show it now has a conversation
+    const conversation = {
+      matchId: selectedMatch._id,
+      user: selectedMatch.user,
+      lastMessage: {
+        content: messageContent,
+        createdAt: new Date(),
+        isFromMe: true,
+      },
+      unreadCount: 0,
+      matchedAt: selectedMatch.matchedAt,
+    };
+
+    setCurrentConversation(conversation);
     navigate("/chat");
+
+    // Reload matches to update the UI
+    loadMatches();
   };
 
   const handleUnmatch = async (matchId) => {
@@ -100,6 +133,50 @@ const MatchesList = () => {
     if (diffDays === 2) return "Yesterday";
     if (diffDays <= 7) return `${diffDays - 1} days ago`;
     return date.toLocaleDateString();
+  };
+
+  const getMatchStatus = (match) => {
+    const lastMessage = getLastMessage(match._id);
+    const unreadCount = getUnreadCount(match._id);
+
+    if (!lastMessage) {
+      // Calculate how long since match
+      const matchDate = new Date(match.matchedAt);
+      const now = new Date();
+      const diffHours = Math.floor((now - matchDate) / (1000 * 60 * 60));
+
+      if (diffHours < 24) {
+        return {
+          type: "new",
+          text: "New Match! Start the conversation",
+          color: "bg-green-100 text-green-800 border-green-200",
+        };
+      } else if (diffHours < 72) {
+        return {
+          type: "pending",
+          text: "Say hello before it expires!",
+          color: "bg-yellow-100 text-yellow-800 border-yellow-200",
+        };
+      } else {
+        return {
+          type: "expiring",
+          text: "Match expires soon!",
+          color: "bg-red-100 text-red-800 border-red-200",
+        };
+      }
+    } else if (unreadCount > 0) {
+      return {
+        type: "unread",
+        text: `${unreadCount} new message${unreadCount > 1 ? "s" : ""}`,
+        color: "bg-blue-100 text-blue-800 border-blue-200",
+      };
+    } else {
+      return {
+        type: "active",
+        text: "Active conversation",
+        color: "bg-gray-100 text-gray-800 border-gray-200",
+      };
+    }
   };
 
   if (loading) {
@@ -154,6 +231,12 @@ const MatchesList = () => {
         <p className='text-gray-600 mb-6'>
           Start swiping to find your perfect match!
         </p>
+        <button
+          onClick={() => (window.location.href = "#discover")}
+          className='bg-gradient-to-r from-pink-500 to-red-500 text-white px-6 py-3 rounded-lg hover:from-pink-600 hover:to-red-600 transition-all duration-200'
+        >
+          Start Discovering
+        </button>
       </div>
     );
   }
@@ -161,9 +244,15 @@ const MatchesList = () => {
   return (
     <div>
       <div className='flex justify-between items-center mb-6'>
-        <h2 className='text-2xl font-bold text-gray-900'>
-          Your Matches ({matches.length})
-        </h2>
+        <div>
+          <h2 className='text-2xl font-bold text-gray-900'>
+            Your Matches ({matches.length})
+          </h2>
+          <p className='text-gray-600 text-sm mt-1'>
+            {matches.filter((m) => !getLastMessage(m._id)).length} new
+            conversations to start
+          </p>
+        </div>
         <button
           onClick={loadMatches}
           className='text-pink-600 hover:text-pink-700 font-medium'
@@ -176,12 +265,20 @@ const MatchesList = () => {
         {matches.map((match) => {
           const lastMessage = getLastMessage(match._id);
           const unreadCount = getUnreadCount(match._id);
+          const status = getMatchStatus(match);
 
           return (
             <div
               key={match._id}
-              className='bg-white rounded-xl shadow-sm border hover:shadow-md transition-shadow'
+              className='bg-white rounded-xl shadow-sm border hover:shadow-md transition-shadow relative'
             >
+              {/* Status Badge */}
+              <div
+                className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium border ${status.color} z-10`}
+              >
+                {status.text}
+              </div>
+
               {/* User Photo */}
               <div className='relative'>
                 {match.user.primaryPhoto ? (
@@ -198,38 +295,17 @@ const MatchesList = () => {
                   </div>
                 )}
 
-                {/* Match Date Badge */}
-                <div className='absolute top-3 left-3 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium'>
-                  Matched {formatDate(match.matchedAt)}
-                </div>
-
                 {/* Unread Messages Badge */}
                 {unreadCount > 0 && (
-                  <div className='absolute top-3 right-3 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-medium min-w-[20px] text-center'>
+                  <div className='absolute top-3 right-3 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-medium min-w-[20px] text-center animate-pulse'>
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </div>
                 )}
 
-                {/* Unmatch Button */}
-                <button
-                  onClick={() => handleUnmatch(match._id)}
-                  className='absolute top-3 right-3 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100'
-                  title='Unmatch'
-                >
-                  <svg
-                    className='w-3 h-3'
-                    fill='none'
-                    stroke='currentColor'
-                    viewBox='0 0 24 24'
-                  >
-                    <path
-                      strokeLinecap='round'
-                      strokeLinejoin='round'
-                      strokeWidth={2}
-                      d='M6 18L18 6M6 6l12 12'
-                    />
-                  </svg>
-                </button>
+                {/* Match Date Badge */}
+                <div className='absolute bottom-3 right-3 bg-white bg-opacity-90 text-gray-800 text-xs px-2 py-1 rounded-full font-medium'>
+                  {formatDate(match.matchedAt)}
+                </div>
               </div>
 
               {/* User Info */}
@@ -247,7 +323,7 @@ const MatchesList = () => {
                 )}
 
                 {/* Last Message Preview */}
-                {lastMessage && (
+                {lastMessage ? (
                   <div className='bg-gray-50 rounded-lg p-3 mb-3'>
                     <p className='text-sm text-gray-700 line-clamp-2'>
                       {lastMessage.isFromMe && (
@@ -259,13 +335,23 @@ const MatchesList = () => {
                       {formatDate(lastMessage.createdAt)}
                     </p>
                   </div>
+                ) : (
+                  <div className='bg-gradient-to-r from-pink-50 to-red-50 rounded-lg p-3 mb-3 border border-pink-200'>
+                    <p className='text-sm text-pink-700 text-center'>
+                      💬 Start your conversation with {match.user.firstName}!
+                    </p>
+                  </div>
                 )}
 
                 {/* Action Buttons */}
                 <div className='flex space-x-2'>
                   <button
                     onClick={() => handleStartChat(match)}
-                    className='flex-1 bg-gradient-to-r from-pink-500 to-red-500 text-white py-2 px-4 rounded-lg hover:from-pink-600 hover:to-red-600 transition-all duration-200 text-sm font-medium flex items-center justify-center'
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center ${
+                      lastMessage
+                        ? "bg-gradient-to-r from-pink-500 to-red-500 text-white hover:from-pink-600 hover:to-red-600"
+                        : "bg-green-500 text-white hover:bg-green-600 animate-pulse"
+                    }`}
                   >
                     <svg
                       className='w-4 h-4 mr-2'
@@ -304,15 +390,41 @@ const MatchesList = () => {
                   </button>
                 </div>
 
-                {/* Last Activity */}
-                <div className='mt-3 text-xs text-gray-500 text-center'>
-                  Last activity: {formatDate(match.lastActivity)}
-                </div>
+                {/* Time since match for new matches */}
+                {!lastMessage && (
+                  <div className='mt-3 text-xs text-gray-500 text-center'>
+                    Matched {formatDate(match.matchedAt)}
+                    {(() => {
+                      const matchDate = new Date(match.matchedAt);
+                      const now = new Date();
+                      const diffHours = Math.floor(
+                        (now - matchDate) / (1000 * 60 * 60)
+                      );
+
+                      if (diffHours >= 48) {
+                        return " • Expires in " + (72 - diffHours) + " hours";
+                      }
+                      return "";
+                    })()}
+                  </div>
+                )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* First Message Prompt Modal */}
+      {showFirstMessagePrompt && selectedMatch && (
+        <FirstMessagePrompt
+          match={selectedMatch}
+          onMessageSent={handleFirstMessageSent}
+          onClose={() => {
+            setShowFirstMessagePrompt(false);
+            setSelectedMatch(null);
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -20,6 +20,7 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState("discover");
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
+  const [error, setError] = useState("");
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
@@ -27,6 +28,9 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
+        setError("");
+
         // Fetch profile data
         const profileResponse = await axios.get(`${API_URL}/profile`);
         if (profileResponse.data.success) {
@@ -52,6 +56,7 @@ const Dashboard = () => {
         }
       } catch (error) {
         console.error("Error fetching profile data:", error);
+        setError("Failed to load dashboard data. Please refresh the page.");
       } finally {
         setLoading(false);
       }
@@ -134,6 +139,40 @@ const Dashboard = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className='min-h-screen flex items-center justify-center bg-gray-50'>
+        <div className='text-center max-w-md mx-auto p-6'>
+          <div className='text-red-500 mb-4'>
+            <svg
+              className='w-16 h-16 mx-auto'
+              fill='none'
+              stroke='currentColor'
+              viewBox='0 0 24 24'
+            >
+              <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                strokeWidth={2}
+                d='M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+              />
+            </svg>
+          </div>
+          <h3 className='text-lg font-semibold text-gray-900 mb-2'>
+            Something went wrong
+          </h3>
+          <p className='text-gray-600 mb-4'>{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className='bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg transition-colors'
+          >
+            Refresh Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className='min-h-screen bg-gray-50'>
       {/* Header */}
@@ -150,6 +189,7 @@ const Dashboard = () => {
               <button
                 onClick={() => navigate("/chat")}
                 className='relative p-2 text-gray-600 hover:text-pink-600 transition-colors group'
+                title='Messages'
               >
                 <svg
                   className='w-6 h-6'
@@ -169,13 +209,11 @@ const Dashboard = () => {
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </div>
                 )}
-
-                <div className='absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-gray-800 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10'>
-                  {unreadCount > 0 ? `${unreadCount} new messages` : "Messages"}
-                </div>
               </button>
 
-              <span className='text-gray-700'>Welcome, {user?.firstName}!</span>
+              <span className='text-gray-700 hidden sm:block'>
+                Welcome, {user?.firstName}!
+              </span>
               <button
                 onClick={handleLogout}
                 className='bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200'
@@ -732,24 +770,24 @@ const Dashboard = () => {
             )}
           </div>
         </div>
-
-        {/* Development Progress */}
-        <div className='bg-white rounded-xl shadow-sm border p-6 mt-6'>
-          <h3 className='text-lg font-semibold text-gray-900 mb-4'>
-            Development Progress
-          </h3>
-          <div className='space-y-4'>
-            <div className='flex justify-between'>
-              <span className='text-gray-600'>Total Users:</span>
-              <span className='font-semibold'>{stats?.total || 0}</span>
-            </div>
-            <div className='flex justify-between'>
-              <span className='text-gray-600'>Total Matches:</span>
-              <span className='font-semibold'>{stats?.matches || 0}</span>
-            </div>
-          </div>
-        </div>
       </main>
+
+      {/* Modals */}
+      {showProfileEdit && (
+        <ProfileEdit
+          user={user}
+          onProfileUpdate={handleProfileUpdate}
+          onClose={() => setShowProfileEdit(false)}
+        />
+      )}
+
+      {showPhotoUpload && (
+        <PhotoUpload
+          user={user}
+          onPhotosUpdate={handleProfileUpdate}
+          onClose={() => setShowPhotoUpload(false)}
+        />
+      )}
     </div>
   );
 };
