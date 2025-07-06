@@ -424,7 +424,7 @@ const Dashboard = () => {
                 </div>
                 <div className='text-sm text-gray-600 mb-2'>Likes Given</div>
                 <div className='text-xs text-blue-600 font-medium'>
-                  {stats.matches.conversionRate}% Match Rate
+                  {stats.matches?.conversionRate || 0}% Match Rate
                 </div>
               </div>
 
@@ -435,7 +435,7 @@ const Dashboard = () => {
                 </div>
                 <div className='text-sm text-gray-600 mb-2'>Likes Received</div>
                 <div className='text-xs text-green-600 font-medium'>
-                  {stats.matches.messageRate}% Message Rate
+                  {stats.matches?.messageRate || 0}% Message Rate
                 </div>
               </div>
             </div>
@@ -459,12 +459,12 @@ const Dashboard = () => {
                 <div>
                   <div className='flex justify-between text-sm text-gray-600 mb-1'>
                     <span>Conversation Success</span>
-                    <span>{stats.matches.messageRate}%</span>
+                    <span>{stats.matches?.messageRate || 0}%</span>
                   </div>
                   <div className='w-full bg-gray-200 rounded-full h-2'>
                     <div
                       className='bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-500'
-                      style={{ width: `${stats.matches.messageRate}%` }}
+                      style={{ width: `${stats.matches?.messageRate || 0}%` }}
                     ></div>
                   </div>
                 </div>

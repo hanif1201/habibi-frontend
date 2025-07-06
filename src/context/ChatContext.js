@@ -1,4 +1,4 @@
-// src/context/ChatContext.js - FIXED VERSION
+// src/context/ChatContext.js - ENHANCED FIXED VERSION
 
 import React, {
   createContext,
@@ -23,26 +23,41 @@ export const useChat = () => {
 };
 
 export const ChatProvider = ({ children }) => {
-  const { user, token } = useAuth();
+  const { user, token, isAuthenticated } = useAuth();
+
+  // Core state
   const [socket, setSocket] = useState(null);
-  const [onlineUsers, setOnlineUsers] = useState([]);
-  const [conversations, setConversations] = useState([]);
-  const [currentConversation, setCurrentConversation] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [typingUsers, setTypingUsers] = useState({});
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState(null);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
 
-  const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+  // Chat state
+  const [conversations, setConversations] = useState([]);
+  const [currentConversation, setCurrentConversation] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // User state
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const [typingUsers, setTypingUsers] = useState({});
+
+  // Refs
+  const socketRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const typingTimeoutsRef = useRef(new Map());
-  const socketRef = useRef(null);
-  const maxReconnectAttempts = 5;
+  const connectionAttemptRef = useRef(false);
 
-  // Clear all timeouts function
-  const clearAllTimeouts = useCallback(() => {
+  // Constants
+  const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
+  const MAX_RECONNECT_ATTEMPTS = 5;
+  const RECONNECT_DELAY_BASE = 1000;
+  const MAX_RECONNECT_DELAY = 30000;
+
+  // Enhanced cleanup function
+  const cleanupSocket = useCallback(() => {
+    console.log("🧹 Cleaning up socket connection...");
+
+    // Clear timeouts
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
@@ -52,7 +67,90 @@ export const ChatProvider = ({ children }) => {
       clearTimeout(timeout);
     });
     typingTimeoutsRef.current.clear();
+
+    // Cleanup socket
+    if (socketRef.current) {
+      socketRef.current.removeAllListeners();
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+
+    // Reset state
+    setSocket(null);
+    setConnected(false);
+    setOnlineUsers([]);
+    setTypingUsers({});
+    connectionAttemptRef.current = false;
   }, []);
+
+  // Enhanced error handling
+  const handleSocketError = useCallback((error, context = "unknown") => {
+    console.error(`❌ Socket error in ${context}:`, error);
+
+    let errorMessage = "Connection error";
+    let shouldReconnect = true;
+
+    if (error.message) {
+      if (error.message.includes("Authentication failed")) {
+        errorMessage = "Authentication failed. Please login again.";
+        shouldReconnect = false;
+      } else if (error.message.includes("Network Error")) {
+        errorMessage = "Network connection failed";
+      } else if (error.message.includes("timeout")) {
+        errorMessage = "Connection timeout";
+      } else {
+        errorMessage = error.message;
+      }
+    }
+
+    setError(errorMessage);
+    setConnected(false);
+
+    if (shouldReconnect) {
+      handleReconnection();
+    }
+  }, []);
+
+  // Calculate reconnection delay with exponential backoff
+  const getReconnectDelay = useCallback((attemptNumber) => {
+    const delay = Math.min(
+      RECONNECT_DELAY_BASE * Math.pow(2, attemptNumber),
+      MAX_RECONNECT_DELAY
+    );
+    return delay + Math.random() * 1000; // Add jitter
+  }, []);
+
+  // Enhanced reconnection logic
+  const handleReconnection = useCallback(() => {
+    if (!isAuthenticated || !user || !token) {
+      console.log("❌ Cannot reconnect: No authentication");
+      return;
+    }
+
+    if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      console.log("❌ Max reconnection attempts reached");
+      setError("Unable to connect to chat server. Please refresh the page.");
+      return;
+    }
+
+    if (connectionAttemptRef.current) {
+      console.log("🔄 Connection attempt already in progress");
+      return;
+    }
+
+    const delay = getReconnectDelay(reconnectAttempts);
+    console.log(
+      `🔄 Attempting reconnection in ${Math.round(delay)}ms (attempt ${
+        reconnectAttempts + 1
+      }/${MAX_RECONNECT_ATTEMPTS})`
+    );
+
+    setReconnectAttempts((prev) => prev + 1);
+
+    reconnectTimeoutRef.current = setTimeout(() => {
+      initializeSocket();
+    }, delay);
+  }, [isAuthenticated, user, token, reconnectAttempts, getReconnectDelay]);
 
   // Socket event handlers
   const handleConnect = useCallback(() => {
@@ -60,74 +158,102 @@ export const ChatProvider = ({ children }) => {
     setConnected(true);
     setError(null);
     setReconnectAttempts(0);
-    clearAllTimeouts();
-  }, [clearAllTimeouts]);
+    connectionAttemptRef.current = false;
 
-  const handleDisconnect = useCallback((reason) => {
-    console.log("❌ Disconnected from chat server:", reason);
-    setConnected(false);
-    if (reason !== "io client disconnect") {
-      handleReconnection();
+    // Clear any pending reconnection attempts
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
     }
   }, []);
 
-  const handleConnectError = useCallback((error) => {
-    console.error("🚫 Socket connection error:", error.message);
-    setConnected(false);
-    setError(`Connection failed: ${error.message}`);
-    handleReconnection();
-  }, []);
+  const handleDisconnect = useCallback(
+    (reason) => {
+      console.log("❌ Disconnected from chat server:", reason);
+      setConnected(false);
+      connectionAttemptRef.current = false;
 
+      // Only attempt reconnection for unexpected disconnects
+      if (reason !== "io client disconnect" && isAuthenticated) {
+        handleReconnection();
+      }
+    },
+    [isAuthenticated, handleReconnection]
+  );
+
+  const handleConnectError = useCallback(
+    (error) => {
+      console.error("🚫 Socket connection error:", error);
+      connectionAttemptRef.current = false;
+      handleSocketError(error, "connection");
+    },
+    [handleSocketError]
+  );
+
+  // Message handlers
   const handleNewMessage = useCallback(
     (message) => {
       console.log("📧 New message received:", message);
 
-      if (
-        currentConversation &&
-        message.matchId === currentConversation.matchId
-      ) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            ...message,
-            isFromMe: message.sender._id === user?._id,
-          },
-        ]);
-      }
+      try {
+        // Update messages if in current conversation
+        if (
+          currentConversation &&
+          message.matchId === currentConversation.matchId
+        ) {
+          setMessages((prev) => {
+            // Prevent duplicate messages
+            const exists = prev.some((msg) => msg._id === message._id);
+            if (exists) return prev;
 
-      // Update conversations list
-      setConversations((prev) => {
-        const updated = prev.map((conv) => {
-          if (conv.matchId === message.matchId) {
-            return {
-              ...conv,
-              lastMessage: {
-                content: message.content,
-                createdAt: message.createdAt,
+            return [
+              ...prev,
+              {
+                ...message,
                 isFromMe: message.sender._id === user?._id,
               },
-              unreadCount:
-                message.sender._id === user?._id
-                  ? conv.unreadCount
-                  : conv.unreadCount + 1,
-            };
-          }
-          return conv;
+            ];
+          });
+        }
+
+        // Update conversations list
+        setConversations((prev) => {
+          const updated = prev.map((conv) => {
+            if (conv.matchId === message.matchId) {
+              return {
+                ...conv,
+                lastMessage: {
+                  content: message.content,
+                  createdAt: message.createdAt,
+                  isFromMe: message.sender._id === user?._id,
+                },
+                unreadCount:
+                  message.sender._id === user?._id
+                    ? conv.unreadCount
+                    : conv.unreadCount + 1,
+              };
+            }
+            return conv;
+          });
+
+          // Sort by last message time
+          return updated.sort((a, b) => {
+            const aTime = a.lastMessage
+              ? new Date(a.lastMessage.createdAt)
+              : new Date(a.matchedAt);
+            const bTime = b.lastMessage
+              ? new Date(b.lastMessage.createdAt)
+              : new Date(b.matchedAt);
+            return bTime - aTime;
+          });
         });
 
-        return updated.sort((a, b) => {
-          const aTime = a.lastMessage
-            ? new Date(a.lastMessage.createdAt)
-            : new Date(a.matchedAt);
-          const bTime = b.lastMessage
-            ? new Date(b.lastMessage.createdAt)
-            : new Date(b.matchedAt);
-          return bTime - aTime;
-        });
-      });
-
-      if (message.sender._id !== user?._id) {
-        setUnreadCount((prev) => prev + 1);
+        // Update unread count
+        if (message.sender._id !== user?._id) {
+          setUnreadCount((prev) => prev + 1);
+        }
+      } catch (error) {
+        console.error("Error handling new message:", error);
       }
     },
     [currentConversation, user]
@@ -136,15 +262,23 @@ export const ChatProvider = ({ children }) => {
   const handleUserOnline = useCallback((data) => {
     console.log("🟢 User online:", data.userId);
     setOnlineUsers((prev) => {
-      const existing = prev.find((u) => u.user._id === data.userId);
+      const existing = prev.find((u) => u.user?._id === data.userId);
       if (existing) return prev;
-      return [...prev, { user: { _id: data.userId }, lastSeen: new Date() }];
+
+      return [
+        ...prev,
+        {
+          user: { _id: data.userId },
+          lastSeen: new Date(),
+          connectedAt: new Date(),
+        },
+      ];
     });
   }, []);
 
   const handleUserOffline = useCallback((data) => {
     console.log("🔴 User offline:", data.userId);
-    setOnlineUsers((prev) => prev.filter((u) => u.user._id !== data.userId));
+    setOnlineUsers((prev) => prev.filter((u) => u.user?._id !== data.userId));
   }, []);
 
   const handleTypingIndicator = useCallback((data) => {
@@ -153,10 +287,12 @@ export const ChatProvider = ({ children }) => {
     if (isTyping) {
       setTypingUsers((prev) => ({ ...prev, [matchId]: userName }));
 
+      // Clear existing timeout
       if (typingTimeoutsRef.current.has(matchId)) {
         clearTimeout(typingTimeoutsRef.current.get(matchId));
       }
 
+      // Set new timeout
       const timeout = setTimeout(() => {
         setTypingUsers((prev) => {
           const updated = { ...prev };
@@ -195,87 +331,63 @@ export const ChatProvider = ({ children }) => {
     [currentConversation]
   );
 
-  const handleError = useCallback((error) => {
-    console.error("⚠️ Socket error:", error);
-    setError(`Socket error: ${error.message || error}`);
-  }, []);
-
-  // Handle reconnection with exponential backoff
-  const handleReconnection = useCallback(() => {
-    if (reconnectAttempts >= maxReconnectAttempts) {
-      console.log("❌ Max reconnection attempts reached");
-      setError("Unable to connect to chat server. Please refresh the page.");
-      return;
-    }
-
-    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
-    console.log(
-      `🔄 Attempting reconnection in ${delay}ms (attempt ${
-        reconnectAttempts + 1
-      }/${maxReconnectAttempts})`
-    );
-
-    setReconnectAttempts((prev) => prev + 1);
-    clearAllTimeouts();
-
-    reconnectTimeoutRef.current = setTimeout(() => {
-      initializeSocket();
-    }, delay);
-  }, [reconnectAttempts, clearAllTimeouts]);
-
-  // Socket cleanup function
-  const cleanupSocket = useCallback(() => {
-    if (socketRef.current) {
-      console.log("🧹 Cleaning up socket connection...");
-      socketRef.current.removeAllListeners();
-      socketRef.current.close();
-      socketRef.current = null;
-    }
-    setSocket(null);
-    setConnected(false);
-    clearAllTimeouts();
-  }, [clearAllTimeouts]);
-
   // Initialize socket connection
   const initializeSocket = useCallback(() => {
-    if (!user || !token) {
+    if (!isAuthenticated || !user || !token) {
       console.log("❌ Cannot initialize socket: No user/token");
       return;
     }
 
-    cleanupSocket();
+    if (connectionAttemptRef.current) {
+      console.log("⚠️ Connection attempt already in progress");
+      return;
+    }
 
+    connectionAttemptRef.current = true;
     console.log("🔄 Initializing socket connection to:", API_URL);
+
+    // Cleanup existing connection
+    cleanupSocket();
     setError(null);
 
-    const newSocket = io(API_URL, {
-      auth: { token },
-      transports: ["polling", "websocket"],
-      timeout: 20000,
-      forceNew: true,
-      reconnection: false,
-    });
+    try {
+      const newSocket = io(API_URL, {
+        auth: { token },
+        transports: ["polling", "websocket"],
+        timeout: 20000,
+        reconnection: false, // We handle reconnection manually
+        forceNew: true,
+        autoConnect: true,
+      });
 
-    socketRef.current = newSocket;
+      socketRef.current = newSocket;
 
-    // Attach event listeners
-    newSocket.on("connect", handleConnect);
-    newSocket.on("disconnect", handleDisconnect);
-    newSocket.on("connect_error", handleConnectError);
-    newSocket.on("error", handleError);
-    newSocket.on("new_message", handleNewMessage);
-    newSocket.on("user_online", handleUserOnline);
-    newSocket.on("user_offline", handleUserOffline);
-    newSocket.on("user_typing", handleTypingIndicator);
-    newSocket.on("messages_read", handleMessagesRead);
+      // Attach event listeners
+      newSocket.on("connect", handleConnect);
+      newSocket.on("disconnect", handleDisconnect);
+      newSocket.on("connect_error", handleConnectError);
+      newSocket.on("error", (error) => handleSocketError(error, "socket"));
 
-    newSocket.on("online_users", (users) => {
-      console.log("👥 Online users updated:", users?.length || 0);
-      setOnlineUsers(users || []);
-    });
+      // Chat events
+      newSocket.on("new_message", handleNewMessage);
+      newSocket.on("user_online", handleUserOnline);
+      newSocket.on("user_offline", handleUserOffline);
+      newSocket.on("user_typing", handleTypingIndicator);
+      newSocket.on("messages_read", handleMessagesRead);
 
-    setSocket(newSocket);
+      newSocket.on("online_users", (users) => {
+        console.log("👥 Online users updated:", users?.length || 0);
+        setOnlineUsers(Array.isArray(users) ? users : []);
+      });
+
+      setSocket(newSocket);
+    } catch (error) {
+      console.error("Failed to create socket:", error);
+      connectionAttemptRef.current = false;
+      handleSocketError(error, "initialization");
+    }
   }, [
+    isAuthenticated,
     user,
     token,
     API_URL,
@@ -283,7 +395,7 @@ export const ChatProvider = ({ children }) => {
     handleConnect,
     handleDisconnect,
     handleConnectError,
-    handleError,
+    handleSocketError,
     handleNewMessage,
     handleUserOnline,
     handleUserOffline,
@@ -291,9 +403,9 @@ export const ChatProvider = ({ children }) => {
     handleMessagesRead,
   ]);
 
-  // Initialize socket when user/token changes
+  // Initialize socket when auth state changes
   useEffect(() => {
-    if (user && token) {
+    if (isAuthenticated && user && token) {
       initializeSocket();
     } else {
       cleanupSocket();
@@ -302,14 +414,23 @@ export const ChatProvider = ({ children }) => {
     return () => {
       cleanupSocket();
     };
-  }, [user, token, initializeSocket, cleanupSocket]);
+  }, [isAuthenticated, user, token, initializeSocket, cleanupSocket]);
 
-  // Chat functions
+  // Chat functions with enhanced error handling
   const joinConversation = useCallback(
     (matchId) => {
-      if (socketRef.current && connected) {
+      if (!socketRef.current || !connected) {
+        console.warn("⚠️ Cannot join conversation: Socket not connected");
+        return false;
+      }
+
+      try {
         console.log("🏠 Joining conversation:", matchId);
         socketRef.current.emit("join_conversation", { matchId });
+        return true;
+      } catch (error) {
+        console.error("Error joining conversation:", error);
+        return false;
       }
     },
     [connected]
@@ -317,9 +438,18 @@ export const ChatProvider = ({ children }) => {
 
   const leaveConversation = useCallback(
     (matchId) => {
-      if (socketRef.current && connected) {
+      if (!socketRef.current || !connected) {
+        console.warn("⚠️ Cannot leave conversation: Socket not connected");
+        return false;
+      }
+
+      try {
         console.log("🚪 Leaving conversation:", matchId);
         socketRef.current.emit("leave_conversation", { matchId });
+        return true;
+      } catch (error) {
+        console.error("Error leaving conversation:", error);
+        return false;
       }
     },
     [connected]
@@ -338,18 +468,25 @@ export const ChatProvider = ({ children }) => {
         return false;
       }
 
-      console.log("📤 Sending message:", {
-        matchId,
-        content: content.substring(0, 50) + "...",
-      });
+      try {
+        console.log("📤 Sending message:", {
+          matchId,
+          content: content.substring(0, 50) + "...",
+        });
 
-      socketRef.current.emit("send_message", {
-        matchId,
-        content: content.trim(),
-        messageType,
-      });
+        socketRef.current.emit("send_message", {
+          matchId,
+          content: content.trim(),
+          messageType,
+          tempId: Date.now(), // For optimistic updates
+        });
 
-      return true;
+        return true;
+      } catch (error) {
+        console.error("Error sending message:", error);
+        setError("Failed to send message");
+        return false;
+      }
     },
     [connected]
   );
@@ -357,7 +494,11 @@ export const ChatProvider = ({ children }) => {
   const startTyping = useCallback(
     (matchId) => {
       if (socketRef.current && connected) {
-        socketRef.current.emit("typing_start", { matchId });
+        try {
+          socketRef.current.emit("typing_start", { matchId });
+        } catch (error) {
+          console.error("Error starting typing:", error);
+        }
       }
     },
     [connected]
@@ -366,7 +507,11 @@ export const ChatProvider = ({ children }) => {
   const stopTyping = useCallback(
     (matchId) => {
       if (socketRef.current && connected) {
-        socketRef.current.emit("typing_stop", { matchId });
+        try {
+          socketRef.current.emit("typing_stop", { matchId });
+        } catch (error) {
+          console.error("Error stopping typing:", error);
+        }
       }
     },
     [connected]
@@ -374,27 +519,37 @@ export const ChatProvider = ({ children }) => {
 
   const markMessagesAsRead = useCallback(
     (matchId) => {
-      if (socketRef.current && connected) {
+      if (!socketRef.current || !connected) return false;
+
+      try {
         socketRef.current.emit("mark_messages_read", { matchId });
 
+        // Update local state
         setConversations((prev) =>
           prev.map((conv) =>
             conv.matchId === matchId ? { ...conv, unreadCount: 0 } : conv
           )
         );
 
+        // Update unread count
         setUnreadCount((prev) => {
           const conversation = conversations.find((c) => c.matchId === matchId);
           return Math.max(0, prev - (conversation?.unreadCount || 0));
         });
+
+        return true;
+      } catch (error) {
+        console.error("Error marking messages as read:", error);
+        return false;
       }
     },
     [connected, conversations]
   );
 
+  // Utility functions
   const isUserOnline = useCallback(
     (userId) => {
-      return onlineUsers.some((u) => u.user._id === userId);
+      return onlineUsers.some((u) => u.user?._id === userId);
     },
     [onlineUsers]
   );
@@ -407,19 +562,28 @@ export const ChatProvider = ({ children }) => {
   );
 
   const reconnect = useCallback(() => {
+    console.log("🔄 Manual reconnection triggered");
     setReconnectAttempts(0);
     setError(null);
-    clearAllTimeouts();
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
     initializeSocket();
-  }, [initializeSocket, clearAllTimeouts]);
+  }, [initializeSocket]);
 
   // Context value
   const contextValue = useMemo(
     () => ({
+      // Connection state
       socket: socketRef.current,
       connected,
       error,
       reconnectAttempts,
+
+      // Chat data
       conversations,
       setConversations,
       currentConversation,
@@ -428,8 +592,12 @@ export const ChatProvider = ({ children }) => {
       setMessages,
       unreadCount,
       setUnreadCount,
+
+      // User state
       onlineUsers,
       typingUsers,
+
+      // Functions
       joinConversation,
       leaveConversation,
       sendMessage,
