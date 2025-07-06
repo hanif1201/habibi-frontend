@@ -11,6 +11,8 @@ import MatchesList from "./Matching/MatchesList";
 import NotificationCenter from "./Notifications/NotificationCenter";
 import LocationSettings from "./Profile/LocationSettings";
 import SafetyCenter from "./Safety/SafetyCenter";
+import NotificationSettings from "./Notifications/NotificationSettings";
+import notificationService from "../services/NotificationService";
 import axios from "axios";
 
 const Dashboard = () => {
@@ -30,8 +32,30 @@ const Dashboard = () => {
   const [stats, setStats] = useState(null);
   const [error, setError] = useState("");
   const [notifications, setNotifications] = useState([]);
+  const [showNotificationSettings, setShowNotificationSettings] =
+    useState(false);
+  const [notificationPermission, setNotificationPermission] =
+    useState("default");
+  const [recentNotifications, setRecentNotifications] = useState([]);
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+
+  // Initialize notifications on mount
+  useEffect(() => {
+    const initializeNotifications = async () => {
+      if (user) {
+        const initialized = await notificationService.initialize();
+        if (initialized) {
+          setNotificationPermission(notificationService.getPermissionStatus());
+        }
+
+        // Load recent notifications
+        loadRecentNotifications();
+      }
+    };
+
+    initializeNotifications();
+  }, [user]);
 
   // Fetch comprehensive dashboard data
   useEffect(() => {
@@ -73,8 +97,8 @@ const Dashboard = () => {
           });
         }
 
-        // Load notifications
-        loadNotifications();
+        // Load recent notifications
+        loadRecentNotifications();
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
         setError("Failed to load dashboard data. Please refresh the page.");
@@ -88,23 +112,15 @@ const Dashboard = () => {
     }
   }, [user, API_URL]);
 
-  // Load notifications
-  const loadNotifications = async () => {
+  // Load recent notifications
+  const loadRecentNotifications = async () => {
     try {
-      // This would typically come from a notifications API
-      const mockNotifications = [
-        {
-          id: 1,
-          type: "match",
-          message: "You have a new match!",
-          timestamp: new Date(),
-          read: false,
-        },
-        // Add more mock notifications
-      ];
-      setNotifications(mockNotifications);
+      const notifications = await notificationService.getNotificationHistory(
+        10
+      );
+      setRecentNotifications(notifications);
     } catch (error) {
-      console.error("Error loading notifications:", error);
+      console.error("Failed to load notifications:", error);
     }
   };
 
@@ -186,6 +202,12 @@ const Dashboard = () => {
       action: () => setShowLocationSettings(true),
     },
     {
+      icon: "🔔",
+      label: "Notifications",
+      action: () => setShowNotificationSettings(true),
+      badge: notificationPermission === "default" ? "!" : null,
+    },
+    {
       icon: "🛡️",
       label: "Safety Center",
       action: () => setShowSafetyCenter(true),
@@ -263,15 +285,32 @@ const Dashboard = () => {
                   {connected ? "Connected" : "Reconnecting..."}
                 </span>
               </div>
+              {/* Notification Permission Indicator */}
+              {notificationPermission === "default" && (
+                <div className='flex items-center space-x-1 bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs'>
+                  <svg
+                    className='w-3 h-3'
+                    fill='currentColor'
+                    viewBox='0 0 20 20'
+                  >
+                    <path
+                      fillRule='evenodd'
+                      d='M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z'
+                      clipRule='evenodd'
+                    />
+                  </svg>
+                  <span>Enable notifications</span>
+                </div>
+              )}
             </div>
 
             {/* Action buttons */}
             <div className='flex items-center space-x-4'>
-              {/* Notifications */}
+              {/* Enhanced Notifications Button */}
               <button
-                onClick={() => setShowNotifications(true)}
-                className='relative p-2 text-gray-600 hover:text-pink-600 transition-colors'
-                title='Notifications'
+                onClick={() => setShowNotificationSettings(true)}
+                className='relative p-2 text-gray-600 hover:text-pink-600 transition-colors group'
+                title='Notification Settings'
               >
                 <svg
                   className='w-6 h-6'
@@ -286,9 +325,14 @@ const Dashboard = () => {
                     d='M15 17h5l-3.5-3.5a50.01 50.01 0 01-3.5-.5V17z'
                   />
                 </svg>
-                {notifications.filter((n) => !n.read).length > 0 && (
-                  <div className='absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center'>
-                    {notifications.filter((n) => !n.read).length}
+                {recentNotifications.filter((n) => !n.isRead).length > 0 && (
+                  <div className='absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium animate-pulse'>
+                    {recentNotifications.filter((n) => !n.isRead).length}
+                  </div>
+                )}
+                {notificationPermission === "default" && (
+                  <div className='absolute -top-1 -right-1 bg-yellow-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center'>
+                    !
                   </div>
                 )}
               </button>
@@ -338,6 +382,37 @@ const Dashboard = () => {
 
       {/* Main Content */}
       <main className='max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8'>
+        {/* Notification Permission Banner */}
+        {notificationPermission === "default" && (
+          <div className='bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-6 mb-6 text-white'>
+            <div className='flex items-center justify-between'>
+              <div className='flex items-center space-x-4'>
+                <div className='bg-white bg-opacity-20 rounded-full p-3'>
+                  <svg
+                    className='w-8 h-8'
+                    fill='currentColor'
+                    viewBox='0 0 20 20'
+                  >
+                    <path d='M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z' />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className='text-lg font-semibold'>Stay Connected! 🔔</h3>
+                  <p className='text-blue-100'>
+                    Enable notifications to never miss a match or message
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowNotificationSettings(true)}
+                className='bg-white text-blue-600 px-6 py-2 rounded-lg font-semibold hover:bg-blue-50 transition-colors'
+              >
+                Enable Now
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Profile Completion Alert */}
         {profileCompletion && profileCompletion.percentage < 100 && (
           <ProfileCompletion
@@ -352,22 +427,82 @@ const Dashboard = () => {
           <h3 className='text-lg font-semibold text-gray-900 mb-4'>
             Quick Actions
           </h3>
-          <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
+          <div className='grid grid-cols-2 md:grid-cols-5 gap-4'>
             {quickActions.map((action, index) => (
               <button
                 key={index}
                 onClick={action.action}
                 disabled={action.disabled}
-                className='flex flex-col items-center p-4 rounded-lg border-2 border-dashed border-gray-200 hover:border-pink-300 hover:bg-pink-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                className='relative flex flex-col items-center p-4 rounded-lg border-2 border-dashed border-gray-200 hover:border-pink-300 hover:bg-pink-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 <span className='text-2xl mb-2'>{action.icon}</span>
                 <span className='text-sm font-medium text-gray-700'>
                   {action.label}
                 </span>
+                {action.badge && (
+                  <div className='absolute -top-1 -right-1 bg-yellow-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold'>
+                    {action.badge}
+                  </div>
+                )}
               </button>
             ))}
           </div>
         </div>
+
+        {/* Recent Notifications Panel */}
+        {recentNotifications.length > 0 && (
+          <div className='bg-white rounded-xl shadow-sm border p-6 mb-6'>
+            <div className='flex justify-between items-center mb-4'>
+              <h3 className='text-lg font-semibold text-gray-900'>
+                Recent Notifications
+              </h3>
+              <button
+                onClick={() => setShowNotificationSettings(true)}
+                className='text-pink-600 hover:text-pink-700 font-medium text-sm'
+              >
+                View All
+              </button>
+            </div>
+            <div className='space-y-3'>
+              {recentNotifications.slice(0, 3).map((notification) => (
+                <div
+                  key={notification._id}
+                  className={`flex items-center space-x-3 p-3 rounded-lg border transition-colors ${
+                    notification.isRead
+                      ? "border-gray-200 bg-gray-50"
+                      : "border-pink-200 bg-pink-50"
+                  }`}
+                >
+                  <div className='flex-shrink-0'>
+                    {getNotificationIcon(notification.type)}
+                  </div>
+                  <div className='flex-1 min-w-0'>
+                    <p
+                      className={`text-sm font-medium ${
+                        notification.isRead ? "text-gray-900" : "text-pink-900"
+                      }`}
+                    >
+                      {notification.title}
+                    </p>
+                    <p
+                      className={`text-sm ${
+                        notification.isRead ? "text-gray-600" : "text-pink-700"
+                      }`}
+                    >
+                      {notification.body}
+                    </p>
+                    <p className='text-xs text-gray-500 mt-1'>
+                      {notification.timeAgo}
+                    </p>
+                  </div>
+                  {!notification.isRead && (
+                    <div className='w-2 h-2 bg-pink-500 rounded-full'></div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Enhanced Stats & Activity Overview */}
         {stats && (
@@ -1108,8 +1243,39 @@ const Dashboard = () => {
       {showSafetyCenter && (
         <SafetyCenter onClose={() => setShowSafetyCenter(false)} />
       )}
+
+      {/* New Notification Settings Modal */}
+      {showNotificationSettings && (
+        <NotificationSettings
+          onClose={() => {
+            setShowNotificationSettings(false);
+            setNotificationPermission(
+              notificationService.getPermissionStatus()
+            );
+            loadRecentNotifications();
+          }}
+        />
+      )}
     </div>
   );
+
+  // Helper function to get notification icons
+  function getNotificationIcon(type) {
+    const iconMap = {
+      new_match: "💖",
+      new_message: "💬",
+      new_like: "❤️",
+      super_like: "⭐",
+      profile_view: "👀",
+      match_expiring: "⏰",
+      welcome: "🎉",
+      test: "🧪",
+      system: "⚙️",
+      promotion: "🎁",
+    };
+
+    return <span className='text-2xl'>{iconMap[type] || "🔔"}</span>;
+  }
 };
 
 export default Dashboard;
