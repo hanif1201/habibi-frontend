@@ -1,3 +1,5 @@
+// src/context/ChatContext.js - FIXED VERSION
+
 import React, {
   createContext,
   useContext,
@@ -37,11 +39,7 @@ export const ChatProvider = ({ children }) => {
   const reconnectTimeoutRef = useRef(null);
   const typingTimeoutsRef = useRef(new Map());
   const socketRef = useRef(null);
-  const isCleaningUpRef = useRef(false);
   const maxReconnectAttempts = 5;
-
-  // Message deduplication set
-  const processedMessagesRef = useRef(new Set());
 
   // Clear all timeouts function
   const clearAllTimeouts = useCallback(() => {
@@ -50,59 +48,51 @@ export const ChatProvider = ({ children }) => {
       reconnectTimeoutRef.current = null;
     }
 
-    // Clear all typing timeouts
     typingTimeoutsRef.current.forEach((timeout) => {
       clearTimeout(timeout);
     });
     typingTimeoutsRef.current.clear();
   }, []);
 
-  // Debounced message handler to prevent duplicates
-  const addMessageWithDeduplication = useCallback(
+  // Socket event handlers
+  const handleConnect = useCallback(() => {
+    console.log("✅ Connected to chat server");
+    setConnected(true);
+    setError(null);
+    setReconnectAttempts(0);
+    clearAllTimeouts();
+  }, [clearAllTimeouts]);
+
+  const handleDisconnect = useCallback((reason) => {
+    console.log("❌ Disconnected from chat server:", reason);
+    setConnected(false);
+    if (reason !== "io client disconnect") {
+      handleReconnection();
+    }
+  }, []);
+
+  const handleConnectError = useCallback((error) => {
+    console.error("🚫 Socket connection error:", error.message);
+    setConnected(false);
+    setError(`Connection failed: ${error.message}`);
+    handleReconnection();
+  }, []);
+
+  const handleNewMessage = useCallback(
     (message) => {
-      const messageKey = `${message._id}-${message.createdAt}`;
+      console.log("📧 New message received:", message);
 
-      if (processedMessagesRef.current.has(messageKey)) {
-        return; // Prevent duplicate
-      }
-
-      processedMessagesRef.current.add(messageKey);
-
-      // Clean up old message keys (keep last 1000)
-      if (processedMessagesRef.current.size > 1000) {
-        const keysArray = Array.from(processedMessagesRef.current);
-        const keysToRemove = keysArray.slice(0, 500);
-        keysToRemove.forEach((key) => processedMessagesRef.current.delete(key));
-      }
-
-      setMessages((prev) => {
-        // Double-check for duplicates in current state
-        const exists = prev.find((m) => m._id === message._id);
-        if (exists) return prev;
-
-        return [
+      if (
+        currentConversation &&
+        message.matchId === currentConversation.matchId
+      ) {
+        setMessages((prev) => [
           ...prev,
           {
             ...message,
             isFromMe: message.sender._id === user?._id,
           },
-        ];
-      });
-    },
-    [user]
-  );
-
-  // Memoized event handlers to prevent recreation
-  const handleNewMessage = useCallback(
-    (message) => {
-      console.log("📧 New message received:", message);
-
-      // Add to current conversation if it matches
-      if (
-        currentConversation &&
-        message.matchId === currentConversation.matchId
-      ) {
-        addMessageWithDeduplication(message);
+        ]);
       }
 
       // Update conversations list
@@ -114,7 +104,6 @@ export const ChatProvider = ({ children }) => {
               lastMessage: {
                 content: message.content,
                 createdAt: message.createdAt,
-                senderId: message.sender._id,
                 isFromMe: message.sender._id === user?._id,
               },
               unreadCount:
@@ -126,7 +115,6 @@ export const ChatProvider = ({ children }) => {
           return conv;
         });
 
-        // Sort by last message time
         return updated.sort((a, b) => {
           const aTime = a.lastMessage
             ? new Date(a.lastMessage.createdAt)
@@ -138,41 +126,11 @@ export const ChatProvider = ({ children }) => {
         });
       });
 
-      // Update unread count if message is not from current user
       if (message.sender._id !== user?._id) {
         setUnreadCount((prev) => prev + 1);
       }
     },
-    [currentConversation, user, addMessageWithDeduplication]
-  );
-
-  const handleMessageEdited = useCallback(
-    (data) => {
-      if (currentConversation) {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg._id === data.messageId
-              ? {
-                  ...msg,
-                  content: data.content,
-                  isEdited: true,
-                  editedAt: data.editedAt,
-                }
-              : msg
-          )
-        );
-      }
-    },
-    [currentConversation]
-  );
-
-  const handleMessageDeleted = useCallback(
-    (data) => {
-      if (currentConversation) {
-        setMessages((prev) => prev.filter((msg) => msg._id !== data.messageId));
-      }
-    },
-    [currentConversation]
+    [currentConversation, user]
   );
 
   const handleUserOnline = useCallback((data) => {
@@ -195,12 +153,10 @@ export const ChatProvider = ({ children }) => {
     if (isTyping) {
       setTypingUsers((prev) => ({ ...prev, [matchId]: userName }));
 
-      // Clear existing timeout for this match
       if (typingTimeoutsRef.current.has(matchId)) {
         clearTimeout(typingTimeoutsRef.current.get(matchId));
       }
 
-      // Set new timeout
       const timeout = setTimeout(() => {
         setTypingUsers((prev) => {
           const updated = { ...prev };
@@ -218,7 +174,6 @@ export const ChatProvider = ({ children }) => {
         return updated;
       });
 
-      // Clear timeout
       if (typingTimeoutsRef.current.has(matchId)) {
         clearTimeout(typingTimeoutsRef.current.get(matchId));
         typingTimeoutsRef.current.delete(matchId);
@@ -245,43 +200,11 @@ export const ChatProvider = ({ children }) => {
     setError(`Socket error: ${error.message || error}`);
   }, []);
 
-  const handleDisconnect = useCallback((reason) => {
-    console.log("❌ Disconnected from chat server:", reason);
-    setConnected(false);
-
-    // Only attempt reconnection for certain disconnect reasons and if not cleaning up
-    if (
-      !isCleaningUpRef.current &&
-      (reason === "io server disconnect" || reason === "transport close")
-    ) {
-      handleReconnection();
-    }
-  }, []);
-
-  const handleConnect = useCallback(() => {
-    console.log("✅ Connected to chat server");
-    setConnected(true);
-    setError(null);
-    setReconnectAttempts(0);
-    clearAllTimeouts();
-  }, [clearAllTimeouts]);
-
-  const handleConnectError = useCallback((error) => {
-    console.error("🚫 Socket connection error:", error.message);
-    setConnected(false);
-    setError(`Connection failed: ${error.message}`);
-    if (!isCleaningUpRef.current) {
-      handleReconnection();
-    }
-  }, []);
-
   // Handle reconnection with exponential backoff
   const handleReconnection = useCallback(() => {
-    if (isCleaningUpRef.current || reconnectAttempts >= maxReconnectAttempts) {
-      if (reconnectAttempts >= maxReconnectAttempts) {
-        console.log("❌ Max reconnection attempts reached");
-        setError("Unable to connect to chat server. Please refresh the page.");
-      }
+    if (reconnectAttempts >= maxReconnectAttempts) {
+      console.log("❌ Max reconnection attempts reached");
+      setError("Unable to connect to chat server. Please refresh the page.");
       return;
     }
 
@@ -293,49 +216,34 @@ export const ChatProvider = ({ children }) => {
     );
 
     setReconnectAttempts((prev) => prev + 1);
-
     clearAllTimeouts();
+
     reconnectTimeoutRef.current = setTimeout(() => {
-      if (!isCleaningUpRef.current) {
-        initializeSocket();
-      }
+      initializeSocket();
     }, delay);
   }, [reconnectAttempts, clearAllTimeouts]);
 
   // Socket cleanup function
   const cleanupSocket = useCallback(() => {
-    isCleaningUpRef.current = true;
-
     if (socketRef.current) {
       console.log("🧹 Cleaning up socket connection...");
-
-      // Remove all event listeners
       socketRef.current.removeAllListeners();
       socketRef.current.close();
       socketRef.current = null;
     }
-
     setSocket(null);
     setConnected(false);
     clearAllTimeouts();
-    processedMessagesRef.current.clear();
-
-    setTimeout(() => {
-      isCleaningUpRef.current = false;
-    }, 100);
   }, [clearAllTimeouts]);
 
-  // Enhanced connection handler with proper cleanup
+  // Initialize socket connection
   const initializeSocket = useCallback(() => {
-    if (!user || !token || isCleaningUpRef.current) {
-      console.log("❌ Cannot initialize socket: No user/token or cleaning up");
+    if (!user || !token) {
+      console.log("❌ Cannot initialize socket: No user/token");
       return;
     }
 
-    // Clean up existing socket
-    if (socketRef.current) {
-      cleanupSocket();
-    }
+    cleanupSocket();
 
     console.log("🔄 Initializing socket connection to:", API_URL);
     setError(null);
@@ -345,7 +253,7 @@ export const ChatProvider = ({ children }) => {
       transports: ["polling", "websocket"],
       timeout: 20000,
       forceNew: true,
-      reconnection: false, // We handle reconnection manually
+      reconnection: false,
     });
 
     socketRef.current = newSocket;
@@ -355,11 +263,7 @@ export const ChatProvider = ({ children }) => {
     newSocket.on("disconnect", handleDisconnect);
     newSocket.on("connect_error", handleConnectError);
     newSocket.on("error", handleError);
-
-    // Message events
     newSocket.on("new_message", handleNewMessage);
-    newSocket.on("message_edited", handleMessageEdited);
-    newSocket.on("message_deleted", handleMessageDeleted);
     newSocket.on("user_online", handleUserOnline);
     newSocket.on("user_offline", handleUserOffline);
     newSocket.on("user_typing", handleTypingIndicator);
@@ -381,8 +285,6 @@ export const ChatProvider = ({ children }) => {
     handleConnectError,
     handleError,
     handleNewMessage,
-    handleMessageEdited,
-    handleMessageDeleted,
     handleUserOnline,
     handleUserOffline,
     handleTypingIndicator,
@@ -395,23 +297,19 @@ export const ChatProvider = ({ children }) => {
       initializeSocket();
     } else {
       cleanupSocket();
-      resetChatState();
     }
 
-    // Cleanup on unmount
     return () => {
       cleanupSocket();
     };
   }, [user, token, initializeSocket, cleanupSocket]);
 
-  // Chat functions with error handling and optimistic updates
+  // Chat functions
   const joinConversation = useCallback(
     (matchId) => {
       if (socketRef.current && connected) {
         console.log("🏠 Joining conversation:", matchId);
         socketRef.current.emit("join_conversation", { matchId });
-      } else {
-        console.warn("⚠️ Cannot join conversation: Socket not connected");
       }
     },
     [connected]
@@ -445,31 +343,15 @@ export const ChatProvider = ({ children }) => {
         content: content.substring(0, 50) + "...",
       });
 
-      // Optimistic update
-      const tempMessage = {
-        _id: `temp-${Date.now()}`,
-        content: content.trim(),
-        sender: { _id: user._id, firstName: user.firstName },
-        isFromMe: true,
-        createdAt: new Date(),
-        messageType,
-        isOptimistic: true,
-      };
-
-      if (currentConversation && matchId === currentConversation.matchId) {
-        setMessages((prev) => [...prev, tempMessage]);
-      }
-
       socketRef.current.emit("send_message", {
         matchId,
         content: content.trim(),
         messageType,
-        tempId: tempMessage._id,
       });
 
       return true;
     },
-    [connected, user, currentConversation]
+    [connected]
   );
 
   const startTyping = useCallback(
@@ -495,14 +377,12 @@ export const ChatProvider = ({ children }) => {
       if (socketRef.current && connected) {
         socketRef.current.emit("mark_messages_read", { matchId });
 
-        // Optimistic update
         setConversations((prev) =>
           prev.map((conv) =>
             conv.matchId === matchId ? { ...conv, unreadCount: 0 } : conv
           )
         );
 
-        // Recalculate total unread count
         setUnreadCount((prev) => {
           const conversation = conversations.find((c) => c.matchId === matchId);
           return Math.max(0, prev - (conversation?.unreadCount || 0));
@@ -526,7 +406,6 @@ export const ChatProvider = ({ children }) => {
     [typingUsers]
   );
 
-  // Manual reconnection function
   const reconnect = useCallback(() => {
     setReconnectAttempts(0);
     setError(null);
@@ -534,29 +413,7 @@ export const ChatProvider = ({ children }) => {
     initializeSocket();
   }, [initializeSocket, clearAllTimeouts]);
 
-  // Clear current conversation
-  const clearCurrentConversation = useCallback(() => {
-    setCurrentConversation(null);
-    setMessages([]);
-    processedMessagesRef.current.clear();
-  }, []);
-
-  // Reset all chat state (useful for logout)
-  const resetChatState = useCallback(() => {
-    setOnlineUsers([]);
-    setConversations([]);
-    setCurrentConversation(null);
-    setMessages([]);
-    setUnreadCount(0);
-    setTypingUsers({});
-    setConnected(false);
-    setError(null);
-    setReconnectAttempts(0);
-    clearAllTimeouts();
-    processedMessagesRef.current.clear();
-  }, [clearAllTimeouts]);
-
-  // Memoize the context value to prevent unnecessary re-renders
+  // Context value
   const contextValue = useMemo(
     () => ({
       socket: socketRef.current,
@@ -573,8 +430,6 @@ export const ChatProvider = ({ children }) => {
       setUnreadCount,
       onlineUsers,
       typingUsers,
-
-      // Functions
       joinConversation,
       leaveConversation,
       sendMessage,
@@ -583,8 +438,6 @@ export const ChatProvider = ({ children }) => {
       markMessagesAsRead,
       isUserOnline,
       getTypingStatus,
-      clearCurrentConversation,
-      resetChatState,
       reconnect,
     }),
     [
@@ -605,8 +458,6 @@ export const ChatProvider = ({ children }) => {
       markMessagesAsRead,
       isUserOnline,
       getTypingStatus,
-      clearCurrentConversation,
-      resetChatState,
       reconnect,
     ]
   );
