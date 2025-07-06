@@ -48,12 +48,25 @@ const CardStack = () => {
       console.error("Error loading stats (non-critical):", error);
       // Set default stats if API fails
       setStats({
-        likes: 0,
-        passes: 0,
-        superlikes: 0,
-        total: 0,
-        matches: 0,
-        likesReceived: 0,
+        swipes: {
+          total: {
+            likes: 0,
+            passes: 0,
+            superlikes: 0,
+            total: 0,
+          },
+        },
+        matches: {
+          total: 0,
+          conversations: 0,
+          pending: 0,
+          conversionRate: 0,
+          messageRate: 0,
+        },
+        social: {
+          likesReceived: 0,
+          popularity: "New",
+        },
       });
     }
   };
@@ -178,25 +191,25 @@ const CardStack = () => {
           <div className='grid grid-cols-4 gap-4 text-center'>
             <div>
               <div className='text-lg font-bold text-pink-500'>
-                {stats.likes}
+                {stats.swipes?.total?.likes || 0}
               </div>
               <div className='text-xs text-gray-500'>Likes</div>
             </div>
             <div>
               <div className='text-lg font-bold text-green-500'>
-                {stats.matches}
+                {stats.matches?.total || 0}
               </div>
               <div className='text-xs text-gray-500'>Matches</div>
             </div>
             <div>
               <div className='text-lg font-bold text-blue-500'>
-                {stats.superlikes}
+                {stats.swipes?.total?.superlikes || 0}
               </div>
               <div className='text-xs text-gray-500'>Super Likes</div>
             </div>
             <div>
               <div className='text-lg font-bold text-purple-500'>
-                {stats.likesReceived}
+                {stats.social?.likesReceived || 0}
               </div>
               <div className='text-xs text-gray-500'>Likes Received</div>
             </div>
