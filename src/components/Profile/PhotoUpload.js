@@ -7,13 +7,51 @@ const PhotoUpload = ({ user, onPhotosUpdate, onClose }) => {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
-  const [debugInfo, setDebugInfo] = useState(null);
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
+  // Create axios instance with interceptor for automatic token handling
+  const createApiInstance = () => {
+    const apiInstance = axios.create();
+
+    // Add request interceptor to automatically include token
+    apiInstance.interceptors.request.use(
+      (config) => {
+        const token = localStorage.getItem("habibi_token");
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+          console.log(
+            "🔑 Token added to request:",
+            token.substring(0, 20) + "..."
+          );
+        } else {
+          console.warn("⚠️ No token found in localStorage");
+        }
+        return config;
+      },
+      (error) => {
+        console.error("❌ Request interceptor error:", error);
+        return Promise.reject(error);
+      }
+    );
+
+    // Add response interceptor to handle auth errors
+    apiInstance.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          console.warn("🚫 Unauthorized - token may be invalid");
+          // Optionally redirect to login or refresh token
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return apiInstance;
+  };
+
   const handleFile = (file) => {
     setError("");
-    setDebugInfo(null);
 
     if (!file) {
       setSelectedFile(null);
@@ -21,33 +59,15 @@ const PhotoUpload = ({ user, onPhotosUpdate, onClose }) => {
       return;
     }
 
-    // Enhanced file validation
-    console.log("📁 File selected:", {
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      lastModified: file.lastModified,
-    });
-
     // Validate file type
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      setError(
-        `Invalid file type. Please select: ${allowedTypes
-          .map((t) => t.split("/")[1])
-          .join(", ")}`
-      );
+    if (!file.type.startsWith("image/")) {
+      setError("Please select an image file");
       return;
     }
 
     // Validate file size (5MB)
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      setError(
-        `File size must be less than ${Math.round(
-          maxSize / 1024 / 1024
-        )}MB. Your file is ${Math.round(file.size / 1024 / 1024)}MB.`
-      );
+    if (file.size > 5 * 1024 * 1024) {
+      setError("File size must be less than 5MB");
       return;
     }
 
@@ -85,60 +105,35 @@ const PhotoUpload = ({ user, onPhotosUpdate, onClose }) => {
     }
   };
 
-  const testCloudinaryConnection = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/photos/test-cloudinary`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("habibi_token")}`,
-        },
-      });
-
-      setDebugInfo({
-        type: "cloudinary_test",
-        success: response.data.success,
-        config: response.data.config,
-        message: response.data.message,
-      });
-
-      return response.data.success;
-    } catch (error) {
-      console.error("Cloudinary test failed:", error);
-      setDebugInfo({
-        type: "cloudinary_test",
-        success: false,
-        error: error.response?.data || error.message,
-        config: error.response?.data?.config,
-      });
-      return false;
-    }
-  };
-
   const handleUpload = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile) {
+      setError("Please select a file first");
+      return;
+    }
+
+    // Check for authentication token
+    const token = localStorage.getItem("habibi_token");
+    if (!token) {
+      setError("Authentication required. Please log in again.");
+      return;
+    }
 
     setUploading(true);
     setError("");
-    setDebugInfo(null);
+
+    console.log("📤 Starting file upload...");
+    console.log("📋 File details:", {
+      name: selectedFile.name,
+      size: selectedFile.size,
+      type: selectedFile.type,
+    });
 
     try {
-      // Test Cloudinary connection first
-      console.log("🧪 Testing Cloudinary connection...");
-      const cloudinaryOk = await testCloudinaryConnection();
-
-      if (!cloudinaryOk) {
-        setError(
-          "Cloudinary service is not available. Please check server configuration."
-        );
-        setUploading(false);
-        return;
-      }
-
-      console.log("📤 Starting file upload...");
-
+      // Create form data
       const formData = new FormData();
       formData.append("photo", selectedFile);
 
-      // Log FormData contents for debugging
+      // Log FormData contents
       console.log("📋 FormData contents:");
       for (let [key, value] of formData.entries()) {
         console.log(
@@ -149,26 +144,23 @@ const PhotoUpload = ({ user, onPhotosUpdate, onClose }) => {
         );
       }
 
-      const token = localStorage.getItem("habibi_token");
-      if (!token) {
-        setError("Authentication token not found. Please log in again.");
-        setUploading(false);
-        return;
-      }
+      // Create API instance with token handling
+      const api = createApiInstance();
 
-      console.log("🔑 Using token:", token.substring(0, 20) + "...");
+      console.log("🔑 Token being used:", token.substring(0, 20) + "...");
 
-      const response = await axios.post(`${API_URL}/photos/upload`, formData, {
+      // Upload with progress tracking
+      const response = await api.post(`${API_URL}/photos/upload`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
-          Authorization: `Bearer ${token}`,
+          // Note: Authorization header will be added by interceptor
         },
         timeout: 30000, // 30 second timeout
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round(
             (progressEvent.loaded * 100) / progressEvent.total
           );
-          console.log(`📊 Upload progress: ${percentCompleted}%`);
+          console.log("📊 Upload progress:", percentCompleted + "%");
         },
       });
 
@@ -191,77 +183,37 @@ const PhotoUpload = ({ user, onPhotosUpdate, onClose }) => {
       console.error("❌ Upload error:", error);
 
       let errorMessage = "Error uploading photo";
-      let errorDetails = null;
 
-      if (error.code === "ECONNABORTED") {
-        errorMessage = "Upload timeout. Please try again with a smaller file.";
-      } else if (error.response) {
-        // Server responded with error
-        const serverError = error.response.data;
-        console.error("📊 Server response:", {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: serverError,
-        });
-
-        errorMessage =
-          serverError.message || `Server error: ${error.response.status}`;
-        errorDetails = serverError.details;
-
-        // Set debug info for development
-        setDebugInfo({
-          type: "upload_error",
-          status: error.response.status,
-          statusText: error.response.statusText,
-          error: serverError.error,
-          details: errorDetails,
-          config: serverError.config,
-        });
+      if (error.response) {
+        console.error("📊 Server response:", error.response);
 
         // Handle specific error codes
-        switch (serverError.error) {
-          case "CLOUDINARY_CONFIG_MISSING":
+        switch (error.response.status) {
+          case 401:
+            errorMessage = "Authentication failed. Please log in again.";
+            // Optionally redirect to login
+            break;
+          case 400:
             errorMessage =
-              "Server configuration error. Please contact support.";
+              error.response.data?.message || "Invalid file or request";
             break;
-          case "FILE_TOO_LARGE":
-            errorMessage = "File is too large. Maximum size is 5MB.";
+          case 413:
+            errorMessage = "File too large. Maximum size is 5MB.";
             break;
-          case "INVALID_FILE_TYPE":
+          case 500:
             errorMessage =
-              "Invalid file type. Please select a JPEG, PNG, or WEBP image.";
-            break;
-          case "PHOTO_LIMIT_EXCEEDED":
-            errorMessage = "You already have the maximum number of photos (6).";
-            break;
-          case "NO_FILE":
-            errorMessage =
-              "No file was received. Please select a file and try again.";
+              error.response.data?.message || "Server error. Please try again.";
             break;
           default:
-            break;
+            errorMessage =
+              error.response.data?.message || `Error: ${error.response.status}`;
         }
       } else if (error.request) {
-        // Network error
-        console.error("🌐 Network error:", error.request);
-        errorMessage =
-          "Network error. Please check your connection and try again.";
-        errorDetails = "No response received from server";
-
-        setDebugInfo({
-          type: "network_error",
-          message: "No response from server",
-          request: error.config?.url,
-        });
+        console.error("🌐 No response received:", error.request);
+        errorMessage = "No response from server. Please check your connection.";
       } else {
-        // Request setup error
         console.error("⚙️ Request setup error:", error.message);
-        errorMessage = `Request error: ${error.message}`;
-
-        setDebugInfo({
-          type: "request_error",
-          message: error.message,
-        });
+        errorMessage = error.message || "Request failed";
       }
 
       setError(errorMessage);
@@ -274,13 +226,36 @@ const PhotoUpload = ({ user, onPhotosUpdate, onClose }) => {
     setSelectedFile(null);
     setPreviewUrl(null);
     setError("");
-    setDebugInfo(null);
     onClose();
+  };
+
+  // Test authentication function
+  const testAuth = async () => {
+    try {
+      const token = localStorage.getItem("habibi_token");
+      console.log("🧪 Testing authentication...");
+      console.log("🔑 Token exists:", !!token);
+
+      if (token) {
+        console.log("🔑 Token preview:", token.substring(0, 20) + "...");
+
+        const api = createApiInstance();
+        const response = await api.get(`${API_URL}/profile`);
+        console.log("✅ Auth test successful:", response.data.success);
+      } else {
+        console.log("❌ No token found");
+      }
+    } catch (error) {
+      console.error(
+        "❌ Auth test failed:",
+        error.response?.data || error.message
+      );
+    }
   };
 
   return (
     <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4'>
-      <div className='bg-white rounded-xl shadow-2xl max-w-md w-full p-6 max-h-screen overflow-y-auto'>
+      <div className='bg-white rounded-xl shadow-2xl max-w-md w-full p-6'>
         {/* Header */}
         <div className='flex justify-between items-center mb-6'>
           <h2 className='text-xl font-semibold text-gray-900'>Upload Photo</h2>
@@ -307,61 +282,41 @@ const PhotoUpload = ({ user, onPhotosUpdate, onClose }) => {
         {/* Error Display */}
         {error && (
           <div className='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4'>
-            <div className='flex items-start'>
-              <svg
-                className='w-5 h-5 text-red-500 mt-0.5 mr-3 flex-shrink-0'
-                fill='none'
-                stroke='currentColor'
-                viewBox='0 0 24 24'
-              >
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  strokeWidth={2}
-                  d='M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
-                />
-              </svg>
-              <div>
-                <div className='font-medium'>Upload Failed</div>
-                <div className='text-sm mt-1'>{error}</div>
-              </div>
+            <div className='flex justify-between items-start'>
+              <span>{error}</span>
+              {error.includes("Authentication") && (
+                <button
+                  onClick={testAuth}
+                  className='text-red-600 hover:text-red-800 text-sm underline ml-2'
+                >
+                  Test Auth
+                </button>
+              )}
             </div>
-          </div>
-        )}
-
-        {/* Debug Info Display (Development) */}
-        {debugInfo && process.env.NODE_ENV === "development" && (
-          <div className='bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg mb-4'>
-            <details>
-              <summary className='cursor-pointer font-medium'>
-                Debug Information ({debugInfo.type})
-              </summary>
-              <pre className='text-xs mt-2 overflow-auto bg-blue-100 p-2 rounded'>
-                {JSON.stringify(debugInfo, null, 2)}
-              </pre>
-            </details>
           </div>
         )}
 
         {/* Photo Count Warning */}
         {user?.photos?.length >= 5 && (
           <div className='bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg mb-4'>
-            <div className='flex items-center'>
-              <svg
-                className='w-5 h-5 text-yellow-500 mr-2'
-                fill='none'
-                stroke='currentColor'
-                viewBox='0 0 24 24'
-              >
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  strokeWidth={2}
-                  d='M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.081 16.5c-.77.833.192 2.5 1.732 2.5z'
-                />
-              </svg>
-              You have {user.photos.length}/6 photos. Maximum 6 photos allowed.
+            You have {user.photos.length}/6 photos. Maximum 6 photos allowed.
+          </div>
+        )}
+
+        {/* Debug Info */}
+        {process.env.NODE_ENV === "development" && (
+          <div className='bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg mb-4 text-xs'>
+            <div>🔧 Debug Info:</div>
+            <div>
+              Token exists: {localStorage.getItem("habibi_token") ? "✅" : "❌"}
             </div>
+            <div>API URL: {API_URL}</div>
+            <button
+              onClick={testAuth}
+              className='text-blue-600 hover:text-blue-800 underline mt-1'
+            >
+              Test Authentication
+            </button>
           </div>
         )}
 
@@ -390,9 +345,6 @@ const PhotoUpload = ({ user, onPhotosUpdate, onClose }) => {
                 />
                 <div className='text-sm text-gray-600'>
                   {selectedFile?.name}
-                  <div className='text-xs text-gray-500'>
-                    {selectedFile && Math.round(selectedFile.size / 1024)} KB
-                  </div>
                 </div>
                 <button
                   onClick={() => {
@@ -430,24 +382,12 @@ const PhotoUpload = ({ user, onPhotosUpdate, onClose }) => {
 
             <input
               type='file'
-              accept='image/jpeg,image/jpg,image/png,image/webp'
+              accept='image/*'
               onChange={handleFileSelect}
               className='absolute inset-0 w-full h-full opacity-0 cursor-pointer'
             />
           </div>
         </div>
-
-        {/* Test Connection Button (Development) */}
-        {process.env.NODE_ENV === "development" && (
-          <div className='mb-4'>
-            <button
-              onClick={testCloudinaryConnection}
-              className='w-full text-sm py-2 px-4 border border-blue-300 rounded-lg text-blue-700 hover:bg-blue-50 transition-colors'
-            >
-              Test Cloudinary Connection
-            </button>
-          </div>
-        )}
 
         {/* Action Buttons */}
         <div className='flex space-x-3'>
@@ -493,18 +433,16 @@ const PhotoUpload = ({ user, onPhotosUpdate, onClose }) => {
           </button>
         </div>
 
-        {/* Upload Guidelines */}
+        {/* Upload Tips */}
         <div className='mt-4 p-3 bg-gray-50 rounded-lg'>
-          <h4 className='text-sm font-medium text-gray-900 mb-2'>
-            Photo Guidelines
-          </h4>
-          <ul className='text-xs text-gray-600 space-y-1'>
-            <li>• Use clear, high-quality images</li>
-            <li>• Show your face clearly</li>
-            <li>• Maximum file size: 5MB</li>
-            <li>• Supported formats: JPEG, PNG, WEBP</li>
-            <li>• Maximum 6 photos per profile</li>
-          </ul>
+          <div className='text-sm text-gray-600'>
+            <div className='font-medium mb-1'>💡 Upload Tips:</div>
+            <ul className='text-xs space-y-1'>
+              <li>• Use high-quality images for best results</li>
+              <li>• Square images work best (will be cropped to 800x800)</li>
+              <li>• First photo becomes your primary profile photo</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
