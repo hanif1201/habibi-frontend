@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
-const NotificationCenter = ({ notifications, onClose, onMarkAsRead }) => {
+const NotificationCenter = ({ onClose, onMarkAsRead }) => {
   const [activeTab, setActiveTab] = useState("notifications");
+  const [notifications, setNotifications] = useState([]);
   const [settings, setSettings] = useState({
     matches: true,
     messages: true,
@@ -14,22 +15,42 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead }) => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
-  // Load current notification settings
+  // Load notifications and settings
   useEffect(() => {
+    loadNotifications();
     loadNotificationSettings();
   }, []);
 
+  const loadNotifications = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API_URL}/notifications`);
+
+      if (response.data.success) {
+        setNotifications(response.data.notifications || []);
+        setUnreadCount(response.data.unreadCount || 0);
+      }
+    } catch (error) {
+      console.error("Error loading notifications:", error);
+      setError("Failed to load notifications");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadNotificationSettings = async () => {
     try {
-      const response = await axios.get(`${API_URL}/profile`);
-      if (response.data.success && response.data.user.settings?.notifications) {
-        setSettings(response.data.user.settings.notifications);
+      const response = await axios.get(`${API_URL}/notifications/preferences`);
+      if (response.data.success && response.data.preferences) {
+        setSettings(response.data.preferences);
       }
     } catch (error) {
       console.error("Error loading notification settings:", error);
+      // Don't show error for this, just use defaults
     }
   };
 
@@ -39,14 +60,13 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead }) => {
     setError("");
 
     try {
-      const response = await axios.put(`${API_URL}/profile/notifications`, {
-        notifications: settings,
+      const response = await axios.put(`${API_URL}/notifications/preferences`, {
+        preferences: settings,
       });
 
       if (response.data.success) {
-        // Success feedback
+        // Success feedback could be added here
         setError(""); // Clear any previous errors
-        // You could add a success message here
       }
     } catch (error) {
       console.error("Error saving notification settings:", error);
@@ -148,13 +168,50 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead }) => {
     }
   };
 
-  // Mark all notifications as read
-  const markAllAsRead = () => {
-    notifications.forEach((notification) => {
-      if (!notification.read) {
-        onMarkAsRead(notification.id);
+  // Mark notification as read
+  const markNotificationAsRead = async (notificationId) => {
+    try {
+      await axios.put(`${API_URL}/notifications/${notificationId}/read`);
+
+      // Update local state
+      setNotifications((prev) =>
+        prev.map((notification) =>
+          notification.id === notificationId
+            ? { ...notification, read: true }
+            : notification
+        )
+      );
+
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+
+      // Call parent callback if provided
+      if (onMarkAsRead) {
+        onMarkAsRead(notificationId);
       }
-    });
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+    }
+  };
+
+  // Mark all notifications as read
+  const markAllAsRead = async () => {
+    try {
+      await axios.put(`${API_URL}/notifications/read-all`);
+
+      // Update local state
+      setNotifications((prev) =>
+        prev.map((notification) => ({ ...notification, read: true }))
+      );
+      setUnreadCount(0);
+
+      // Call parent callback for all unread notifications
+      if (onMarkAsRead) {
+        notifications.filter((n) => !n.read).forEach((n) => onMarkAsRead(n.id));
+      }
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      setError("Error marking all notifications as read");
+    }
   };
 
   // Clear all notifications
@@ -165,15 +222,13 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead }) => {
 
     try {
       await axios.delete(`${API_URL}/notifications/clear`);
-      // You would need to update the parent component here
-      onClose();
+      setNotifications([]);
+      setUnreadCount(0);
     } catch (error) {
       console.error("Error clearing notifications:", error);
       setError("Error clearing notifications");
     }
   };
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
     <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4'>
@@ -262,8 +317,15 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead }) => {
                 </div>
               )}
 
+              {/* Loading */}
+              {loading && (
+                <div className='flex items-center justify-center py-8'>
+                  <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500'></div>
+                </div>
+              )}
+
               {/* Notifications List */}
-              {notifications.length === 0 ? (
+              {!loading && notifications.length === 0 ? (
                 <div className='text-center py-8'>
                   <svg
                     className='mx-auto h-12 w-12 text-gray-400 mb-4'
@@ -296,7 +358,7 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead }) => {
                           ? "bg-white border-gray-200"
                           : "bg-blue-50 border-blue-200 shadow-sm"
                       }`}
-                      onClick={() => onMarkAsRead(notification.id)}
+                      onClick={() => markNotificationAsRead(notification.id)}
                     >
                       <div className='flex items-start space-x-3'>
                         {/* Notification Icon */}
@@ -317,6 +379,9 @@ const NotificationCenter = ({ notifications, onClose, onMarkAsRead }) => {
                                 : "text-gray-900 font-medium"
                             }`}
                           >
+                            {notification.title}
+                          </p>
+                          <p className='text-sm text-gray-500 mt-1'>
                             {notification.message}
                           </p>
                           <p className='text-xs text-gray-500 mt-1'>
