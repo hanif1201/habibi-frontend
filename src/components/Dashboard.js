@@ -13,6 +13,7 @@ import LocationSettings from "./Profile/LocationSettings";
 import SafetyCenter from "./Safety/SafetyCenter";
 import NotificationSettings from "./Notifications/NotificationSettings";
 import notificationService from "../services/NotificationService";
+import EmailPreferences from "./Settings/EmailPreferences";
 import axios from "axios";
 
 const Dashboard = () => {
@@ -34,6 +35,7 @@ const Dashboard = () => {
   const [notifications, setNotifications] = useState([]);
   const [showNotificationSettings, setShowNotificationSettings] =
     useState(false);
+  const [showEmailPreferences, setShowEmailPreferences] = useState(false);
   const [notificationPermission, setNotificationPermission] =
     useState("default");
   const [recentNotifications, setRecentNotifications] = useState([]);
@@ -206,6 +208,11 @@ const Dashboard = () => {
       label: "Notifications",
       action: () => setShowNotificationSettings(true),
       badge: notificationPermission === "default" ? "!" : null,
+    },
+    {
+      icon: "📧",
+      label: "Email Settings",
+      action: () => setShowEmailPreferences(true),
     },
     {
       icon: "🛡️",
@@ -413,6 +420,57 @@ const Dashboard = () => {
           </div>
         )}
 
+        {/* Email Verification Banner */}
+        {user && !user.emailVerified && (
+          <div className='bg-gradient-to-r from-orange-500 to-red-600 rounded-xl p-6 mb-6 text-white'>
+            <div className='flex items-center justify-between'>
+              <div className='flex items-center space-x-4'>
+                <div className='bg-white bg-opacity-20 rounded-full p-3'>
+                  <svg
+                    className='w-8 h-8'
+                    fill='currentColor'
+                    viewBox='0 0 20 20'
+                  >
+                    <path d='M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z' />
+                    <path d='M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z' />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className='text-lg font-semibold'>
+                    Verify Your Email Address 📧
+                  </h3>
+                  <p className='text-orange-100'>
+                    Please check your email and click the verification link to
+                    unlock all features
+                  </p>
+                </div>
+              </div>
+              <div className='flex space-x-2'>
+                <button
+                  onClick={async () => {
+                    try {
+                      await axios.post(`${API_URL}/auth/resend-verification`, {
+                        email: user.email,
+                      });
+                      alert(
+                        "Verification email sent! Please check your inbox."
+                      );
+                    } catch (error) {
+                      console.error("Error resending verification:", error);
+                      alert(
+                        "Failed to resend verification email. Please try again."
+                      );
+                    }
+                  }}
+                  className='bg-white text-orange-600 px-4 py-2 rounded-lg font-semibold hover:bg-orange-50 transition-colors'
+                >
+                  Resend Email
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Profile Completion Alert */}
         {profileCompletion && profileCompletion.percentage < 100 && (
           <ProfileCompletion
@@ -427,7 +485,7 @@ const Dashboard = () => {
           <h3 className='text-lg font-semibold text-gray-900 mb-4'>
             Quick Actions
           </h3>
-          <div className='grid grid-cols-2 md:grid-cols-5 gap-4'>
+          <div className='grid grid-cols-2 md:grid-cols-6 gap-4'>
             {quickActions.map((action, index) => (
               <button
                 key={index}
@@ -1255,6 +1313,11 @@ const Dashboard = () => {
             loadRecentNotifications();
           }}
         />
+      )}
+
+      {/* Email Preferences Modal */}
+      {showEmailPreferences && (
+        <EmailPreferences onClose={() => setShowEmailPreferences(false)} />
       )}
     </div>
   );
