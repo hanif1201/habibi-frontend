@@ -4,6 +4,8 @@ import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import { useMatchUrgency } from "../../hooks/useMatchUrgency";
 import ConfettiAnimation from "./ConfettiAnimation";
+import MatchInsights from "./MatchInsights";
+import IcebreakerSuggestions from "./IcebreakerSuggestions";
 import axios from "axios";
 import emailService from "../../services/EmailService";
 
@@ -17,6 +19,8 @@ const MatchModal = ({ match, onClose }) => {
   const [customMessage, setCustomMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
+  const [showIcebreakers, setShowIcebreakers] = useState(false);
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
@@ -132,6 +136,19 @@ const MatchModal = ({ match, onClose }) => {
     alert(
       `View ${match.otherUser.firstName}'s full profile - Feature coming soon!`
     );
+  };
+
+  const handleShowInsights = () => {
+    setShowInsights(true);
+  };
+
+  const handleShowIcebreakers = () => {
+    setShowIcebreakers(true);
+  };
+
+  const handleIcebreakerSelect = (message) => {
+    setSelectedIceBreaker(message);
+    setShowIcebreakers(false);
   };
 
   if (!match) return null;
@@ -330,6 +347,20 @@ const MatchModal = ({ match, onClose }) => {
                       className='bg-transparent border-2 border-white text-white font-semibold py-2 px-4 rounded-xl hover:bg-white hover:text-pink-600 transition-all duration-200 text-sm'
                     >
                       View Profile
+                    </button>
+
+                    <button
+                      onClick={handleShowInsights}
+                      className='bg-transparent border-2 border-white text-white font-semibold py-2 px-4 rounded-xl hover:bg-white hover:text-pink-600 transition-all duration-200 text-sm'
+                    >
+                      Match Insights
+                    </button>
+
+                    <button
+                      onClick={handleShowIcebreakers}
+                      className='bg-transparent border-2 border-white text-white font-semibold py-2 px-4 rounded-xl hover:bg-white hover:text-pink-600 transition-all duration-200 text-sm'
+                    >
+                      Ice Breakers
                     </button>
 
                     <button
@@ -538,6 +569,20 @@ const MatchModal = ({ match, onClose }) => {
           </div>
         </div>
       </div>
+
+      {/* Match Insights Modal */}
+      {showInsights && (
+        <MatchInsights match={match} onClose={() => setShowInsights(false)} />
+      )}
+
+      {/* Icebreaker Suggestions Modal */}
+      {showIcebreakers && (
+        <IcebreakerSuggestions
+          match={match}
+          onSelect={handleIcebreakerSelect}
+          onClose={() => setShowIcebreakers(false)}
+        />
+      )}
     </>
   );
 };

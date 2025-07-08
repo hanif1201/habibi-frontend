@@ -4,7 +4,10 @@ import axios from "axios";
 import { useChat } from "../../context/ChatContext";
 import { useExpirationWarnings } from "../../hooks/useExpirationWarnings";
 import { useMatchUrgency } from "../../hooks/useMatchUrgency";
+import { usePremiumStatus } from "../../hooks/usePremiumStatus";
 import FirstMessagePrompt from "./FirstMessagePrompt";
+import WhoLikedYou from "./WhoLikedYou";
+import MatchQueue from "./MatchQueue";
 
 const MatchesList = () => {
   const [matches, setMatches] = useState([]);
@@ -12,7 +15,10 @@ const MatchesList = () => {
   const [error, setError] = useState("");
   const [showFirstMessagePrompt, setShowFirstMessagePrompt] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState(null);
+  const [showWhoLikedYou, setShowWhoLikedYou] = useState(false);
+  const [showMatchQueue, setShowMatchQueue] = useState(false);
   const { setCurrentConversation, conversations } = useChat();
+  const { isPremium } = usePremiumStatus();
   const navigate = useNavigate();
 
   // Initialize expiration warnings
@@ -116,6 +122,20 @@ const MatchesList = () => {
       console.error("Error unmatching:", error);
       setError("Failed to unmatch");
     }
+  };
+
+  const handleShowWhoLikedYou = () => {
+    setShowWhoLikedYou(true);
+  };
+
+  const handleShowMatchQueue = () => {
+    setShowMatchQueue(true);
+  };
+
+  const handleMatchFromQueue = (match) => {
+    setShowMatchQueue(false);
+    // Handle the match selection - could navigate to chat or show match modal
+    handleStartChat(match);
   };
 
   const getLastMessage = (matchId) => {
@@ -258,12 +278,31 @@ const MatchesList = () => {
             })()}
           </p>
         </div>
-        <button
-          onClick={loadMatches}
-          className='text-pink-600 hover:text-pink-700 font-medium'
-        >
-          Refresh
-        </button>
+        <div className='flex items-center space-x-3'>
+          {/* Premium Features */}
+          {isPremium && (
+            <button
+              onClick={handleShowWhoLikedYou}
+              className='bg-purple-500 text-white px-3 py-2 rounded-lg hover:bg-purple-600 transition-colors text-sm font-medium'
+            >
+              Who Liked You
+            </button>
+          )}
+
+          <button
+            onClick={handleShowMatchQueue}
+            className='bg-blue-500 text-white px-3 py-2 rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium'
+          >
+            Match Queue
+          </button>
+
+          <button
+            onClick={loadMatches}
+            className='text-pink-600 hover:text-pink-700 font-medium'
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
@@ -422,6 +461,22 @@ const MatchesList = () => {
             setShowFirstMessagePrompt(false);
             setSelectedMatch(null);
           }}
+        />
+      )}
+
+      {/* Who Liked You Modal */}
+      {showWhoLikedYou && (
+        <WhoLikedYou
+          onClose={() => setShowWhoLikedYou(false)}
+          onMatch={handleMatchFromQueue}
+        />
+      )}
+
+      {/* Match Queue Modal */}
+      {showMatchQueue && (
+        <MatchQueue
+          onClose={() => setShowMatchQueue(false)}
+          onMatchSelect={handleMatchFromQueue}
         />
       )}
     </div>

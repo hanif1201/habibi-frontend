@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import UserCard from "./UserCard";
 import MatchModal from "./MatchModal";
+import MatchInsights from "./MatchInsights";
+import IcebreakerSuggestions from "./IcebreakerSuggestions";
 import emailService from "../../services/EmailService";
 import notificationService from "../../services/NotificationService";
 import { useChat } from "../../context/ChatContext";
@@ -15,6 +17,10 @@ const CardStack = () => {
   const [match, setMatch] = useState(null);
   const [showMatchModal, setShowMatchModal] = useState(false);
   const [stats, setStats] = useState(null);
+  const [showInsights, setShowInsights] = useState(false);
+  const [showIcebreakers, setShowIcebreakers] = useState(false);
+  const [selectedMatchForInsights, setSelectedMatchForInsights] =
+    useState(null);
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
@@ -188,6 +194,22 @@ const CardStack = () => {
   const closeMatchModal = () => {
     setShowMatchModal(false);
     setMatch(null);
+  };
+
+  const handleShowInsights = (matchData) => {
+    setSelectedMatchForInsights(matchData);
+    setShowInsights(true);
+  };
+
+  const handleShowIcebreakers = (matchData) => {
+    setSelectedMatchForInsights(matchData);
+    setShowIcebreakers(true);
+  };
+
+  const handleIcebreakerSelect = (message) => {
+    // Handle icebreaker selection - could send message or store for later
+    console.log("Selected icebreaker:", message);
+    setShowIcebreakers(false);
   };
 
   const currentUser = users[currentIndex];
@@ -368,6 +390,29 @@ const CardStack = () => {
       {/* Match Modal */}
       {showMatchModal && match && (
         <MatchModal match={match} onClose={closeMatchModal} />
+      )}
+
+      {/* Match Insights Modal */}
+      {showInsights && selectedMatchForInsights && (
+        <MatchInsights
+          match={selectedMatchForInsights}
+          onClose={() => {
+            setShowInsights(false);
+            setSelectedMatchForInsights(null);
+          }}
+        />
+      )}
+
+      {/* Icebreaker Suggestions Modal */}
+      {showIcebreakers && selectedMatchForInsights && (
+        <IcebreakerSuggestions
+          match={selectedMatchForInsights}
+          onSelect={handleIcebreakerSelect}
+          onClose={() => {
+            setShowIcebreakers(false);
+            setSelectedMatchForInsights(null);
+          }}
+        />
       )}
     </div>
   );
