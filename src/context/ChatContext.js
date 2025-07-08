@@ -331,6 +331,43 @@ export const ChatProvider = ({ children }) => {
     [currentConversation]
   );
 
+  // Handle new match notification
+  const handleNewMatch = useCallback((matchData) => {
+    console.log("💖 New match received via socket:", matchData);
+
+    // Update conversations list with new match
+    setConversations((prev) => {
+      const newConversation = {
+        matchId: matchData._id,
+        user: matchData.otherUser,
+        matchedAt: matchData.createdAt,
+        lastMessage: null,
+        unreadCount: 0,
+      };
+
+      // Check if conversation already exists
+      const exists = prev.some((conv) => conv.matchId === matchData._id);
+      if (exists) return prev;
+
+      // Add to beginning of list
+      return [newConversation, ...prev];
+    });
+
+    // Show match notification
+    if (Notification.permission === "granted") {
+      new Notification("💖 New Match!", {
+        body: `You and ${matchData.otherUser.firstName} liked each other!`,
+        icon: "/logo192.png",
+        tag: "new-match",
+        requireInteraction: true,
+      });
+    }
+
+    // Emit custom event for components to listen to
+    const event = new CustomEvent("newMatch", { detail: matchData });
+    window.dispatchEvent(event);
+  }, []);
+
   // Initialize socket connection
   const initializeSocket = useCallback(() => {
     if (!isAuthenticated || !user || !token) {
@@ -374,6 +411,7 @@ export const ChatProvider = ({ children }) => {
       newSocket.on("user_offline", handleUserOffline);
       newSocket.on("user_typing", handleTypingIndicator);
       newSocket.on("messages_read", handleMessagesRead);
+      newSocket.on("new_match", handleNewMatch); // Add new_match handler
 
       newSocket.on("online_users", (users) => {
         console.log("👥 Online users updated:", users?.length || 0);
@@ -401,6 +439,7 @@ export const ChatProvider = ({ children }) => {
     handleUserOffline,
     handleTypingIndicator,
     handleMessagesRead,
+    handleNewMatch, // Add handleNewMatch to dependencies
   ]);
 
   // Initialize socket when auth state changes
@@ -607,6 +646,7 @@ export const ChatProvider = ({ children }) => {
       isUserOnline,
       getTypingStatus,
       reconnect,
+      handleNewMatch,
     }),
     [
       connected,
@@ -627,6 +667,7 @@ export const ChatProvider = ({ children }) => {
       isUserOnline,
       getTypingStatus,
       reconnect,
+      handleNewMatch,
     ]
   );
 

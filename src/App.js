@@ -22,76 +22,83 @@ import ResendVerification from "./components/Auth/ResendVerification";
 import Dashboard from "./components/Dashboard";
 import ChatPage from "./components/Chat/ChatPage";
 import Debug from "./components/Debug";
+import MatchNotification from "./components/Matching/MatchNotification";
 
 import "./App.css";
 
 function App() {
   return (
-    <Router
-      future={{
-        v7_startTransition: true,
-        v7_relativeSplatPath: true,
-      }}
-    >
-      <div className='App'>
-        <AuthProvider>
-          <Routes>
-            {/* Public Authentication Routes */}
-            <Route path='/login' element={<Login />} />
-            <Route path='/register' element={<Register />} />
-            <Route path='/forgot-password' element={<ForgotPassword />} />
-            <Route path='/reset-password/:token' element={<ResetPassword />} />
-            <Route
-              path='/verify-email/:token'
-              element={<EmailVerification />}
-            />
-            <Route
-              path='/resend-verification'
-              element={<ResendVerification />}
-            />
+    <>
+      <MatchNotification />
+      <Router
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
+        <div className='App'>
+          <AuthProvider>
+            <Routes>
+              {/* Public Authentication Routes */}
+              <Route path='/login' element={<Login />} />
+              <Route path='/register' element={<Register />} />
+              <Route path='/forgot-password' element={<ForgotPassword />} />
+              <Route
+                path='/reset-password/:token'
+                element={<ResetPassword />}
+              />
+              <Route
+                path='/verify-email/:token'
+                element={<EmailVerification />}
+              />
+              <Route
+                path='/resend-verification'
+                element={<ResendVerification />}
+              />
 
-            {/* Protected Routes with Chat Provider */}
-            <Route
-              path='/dashboard'
-              element={
-                <ProtectedRoute>
-                  <ChatProvider>
-                    <Dashboard />
-                  </ChatProvider>
-                </ProtectedRoute>
-              }
-            />
+              {/* Protected Routes with Chat Provider */}
+              <Route
+                path='/dashboard'
+                element={
+                  <ProtectedRoute>
+                    <ChatProvider>
+                      <Dashboard />
+                    </ChatProvider>
+                  </ProtectedRoute>
+                }
+              />
 
-            <Route
-              path='/chat'
-              element={
-                <ProtectedRoute>
-                  <ChatProvider>
-                    <ChatPage />
-                  </ChatProvider>
-                </ProtectedRoute>
-              }
-            />
+              <Route
+                path='/chat'
+                element={
+                  <ProtectedRoute>
+                    <ChatProvider>
+                      <ChatPage />
+                    </ChatProvider>
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* Debug Route - Remove in production */}
-            <Route
-              path='/debug'
-              element={
-                <ProtectedRoute>
-                  <Debug />
-                </ProtectedRoute>
-              }
-            />
+              {/* Debug Route - Remove in production */}
+              <Route
+                path='/debug'
+                element={
+                  <ProtectedRoute>
+                    <Debug />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* Default redirect */}
-            <Route path='/' element={<Navigate to='/dashboard' replace />} />
+              {/* Default redirect */}
+              <Route path='/' element={<Navigate to='/dashboard' replace />} />
 
-            {/* Catch all route */}
-            <Route path='*' element={<Navigate to='/dashboard' replace />} />
-          </Routes>
-        </AuthProvider>
-      </div>
-    </Router>
+              {/* Catch all route */}
+              <Route path='*' element={<Navigate to='/dashboard' replace />} />
+            </Routes>
+          </AuthProvider>
+        </div>
+      </Router>
+    </>
   );
 }
 

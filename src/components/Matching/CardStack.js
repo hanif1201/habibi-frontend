@@ -4,6 +4,7 @@ import UserCard from "./UserCard";
 import MatchModal from "./MatchModal";
 import emailService from "../../services/EmailService";
 import notificationService from "../../services/NotificationService";
+import { useChat } from "../../context/ChatContext";
 
 const CardStack = () => {
   const [users, setUsers] = useState([]);
@@ -16,6 +17,8 @@ const CardStack = () => {
   const [stats, setStats] = useState(null);
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+
+  const { socket, isUserOnline, user } = useChat();
 
   // Load potential matches
   useEffect(() => {
@@ -91,6 +94,16 @@ const CardStack = () => {
           const matchData = response.data.match;
           setMatch(matchData);
           setShowMatchModal(true);
+
+          // Real-time socket notification if matched user is online
+          if (
+            socket &&
+            isUserOnline &&
+            matchData.otherUser?._id &&
+            isUserOnline(matchData.otherUser._id)
+          ) {
+            socket.emit("new_match", matchData);
+          }
 
           // Send new match notifications (non-blocking)
           try {
