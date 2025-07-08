@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useChat } from "../../context/ChatContext";
 import { useExpirationWarnings } from "../../hooks/useExpirationWarnings";
+import { useMatchUrgency } from "../../hooks/useMatchUrgency";
 import FirstMessagePrompt from "./FirstMessagePrompt";
 
 const MatchesList = () => {
@@ -139,80 +140,42 @@ const MatchesList = () => {
     return date.toLocaleDateString();
   };
 
-  const getMatchStatus = (match) => {
+  // Enhanced match status using the new urgency hook
+  const MatchStatusBadge = ({ match }) => {
+    const urgencyInfo = useMatchUrgency(match);
     const lastMessage = getLastMessage(match._id);
-    const unreadCount = getUnreadCount(match._id);
 
-    if (!lastMessage) {
-      // Calculate how long since match
-      const matchDate = new Date(match.matchedAt);
-      const now = new Date();
-      const diffHours = Math.floor((now - matchDate) / (1000 * 60 * 60));
-      const hoursLeft = 72 - diffHours;
-
-      if (diffHours < 24) {
-        return {
-          type: "new",
-          text: "New Match! Start the conversation",
-          color: "bg-green-100 text-green-800 border-green-200",
-          urgency: "low",
-        };
-      } else if (hoursLeft > 48) {
-        return {
-          type: "pending",
-          text: "Say hello before it expires!",
-          color: "bg-yellow-100 text-yellow-800 border-yellow-200",
-          urgency: "medium",
-        };
-      } else if (hoursLeft > 24) {
-        return {
-          type: "expiring-soon",
-          text: `Expires in ${hoursLeft}h`,
-          color: "bg-orange-100 text-orange-800 border-orange-200",
-          urgency: "high",
-        };
-      } else if (hoursLeft > 12) {
-        return {
-          type: "expiring-urgent",
-          text: `Expires in ${hoursLeft}h`,
-          color: "bg-red-100 text-red-800 border-red-200",
-          urgency: "critical",
-        };
-      } else if (hoursLeft > 6) {
-        return {
-          type: "expiring-critical",
-          text: `Expires in ${hoursLeft}h`,
-          color: "bg-red-200 text-red-900 border-red-300",
-          urgency: "emergency",
-        };
-      } else {
-        return {
-          type: "expiring-final",
-          text: `Expires in ${hoursLeft}h`,
-          color: "bg-red-300 text-red-900 border-red-400 animate-pulse",
-          urgency: "final",
-        };
-      }
-    } else if (unreadCount > 0) {
-      return {
-        type: "unread",
-        text: `${unreadCount} new message${unreadCount > 1 ? "s" : ""}`,
-        color: "bg-blue-100 text-blue-800 border-blue-200",
-        urgency: "low",
-      };
-    } else {
-      return {
-        type: "active",
-        text: "Active conversation",
-        color: "bg-gray-100 text-gray-800 border-gray-200",
-        urgency: "low",
-      };
+    if (lastMessage) {
+      return (
+        <div className='absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium border bg-green-100 text-green-800 border-green-200 z-10'>
+          Active Chat
+        </div>
+      );
     }
+
+    if (urgencyInfo.showUrgency) {
+      return (
+        <div
+          className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium border ${urgencyInfo.urgencyBgColor} ${urgencyInfo.urgencyBorderColor} ${urgencyInfo.urgencyPulse} z-10`}
+        >
+          <div className='flex items-center space-x-1'>
+            <span>{urgencyInfo.urgencyIcon}</span>
+            <span>{urgencyInfo.timeRemainingText}</span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className='absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium border bg-blue-100 text-blue-800 border-blue-200 z-10'>
+        New Match
+      </div>
+    );
   };
 
   if (loading) {
     return (
-      <div className='flex items-center justify-center py-12'>
+      <div className='flex items-center justify-center h-64'>
         <div className='text-center'>
           <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4'></div>
           <p className='text-gray-600'>Loading your matches...</p>
@@ -260,10 +223,10 @@ const MatchesList = () => {
           No matches yet
         </h3>
         <p className='text-gray-600 mb-6'>
-          Start swiping to find your perfect match!
+          Start swiping to discover potential matches!
         </p>
         <button
-          onClick={() => (window.location.href = "#discover")}
+          onClick={() => navigate("/dashboard")}
           className='bg-gradient-to-r from-pink-500 to-red-500 text-white px-6 py-3 rounded-lg hover:from-pink-600 hover:to-red-600 transition-all duration-200'
         >
           Start Discovering
@@ -307,19 +270,14 @@ const MatchesList = () => {
         {matches.map((match) => {
           const lastMessage = getLastMessage(match._id);
           const unreadCount = getUnreadCount(match._id);
-          const status = getMatchStatus(match);
 
           return (
             <div
               key={match._id}
               className='bg-white rounded-xl shadow-sm border hover:shadow-md transition-shadow relative'
             >
-              {/* Status Badge */}
-              <div
-                className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-medium border ${status.color} z-10`}
-              >
-                {status.text}
-              </div>
+              {/* Enhanced Status Badge */}
+              <MatchStatusBadge match={match} />
 
               {/* User Photo */}
               <div className='relative'>
@@ -343,30 +301,48 @@ const MatchesList = () => {
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </div>
                 )}
-
-                {/* Match Date Badge */}
-                <div className='absolute bottom-3 right-3 bg-white bg-opacity-90 text-gray-800 text-xs px-2 py-1 rounded-full font-medium'>
-                  {formatDate(match.matchedAt)}
-                </div>
               </div>
 
               {/* User Info */}
               <div className='p-4'>
-                <div className='flex justify-between items-start mb-2'>
+                <div className='flex items-center justify-between mb-2'>
                   <h3 className='text-lg font-semibold text-gray-900'>
                     {match.user.firstName}, {match.user.age}
                   </h3>
+                  {match.user.distance && (
+                    <span className='text-sm text-gray-500'>
+                      {match.user.distance} km away
+                    </span>
+                  )}
                 </div>
 
-                {match.user.bio && (
-                  <p className='text-gray-600 text-sm mb-3 line-clamp-2'>
-                    {match.user.bio}
-                  </p>
-                )}
+                {/* Enhanced Profile Details */}
+                <div className='flex flex-wrap gap-1 mb-3'>
+                  {match.user.occupation && (
+                    <span className='px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full'>
+                      💼 {match.user.occupation}
+                    </span>
+                  )}
+                  {match.user.education && (
+                    <span className='px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full'>
+                      🎓 {match.user.education}
+                    </span>
+                  )}
+                  {match.user.location && (
+                    <span className='px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full'>
+                      📍 {match.user.location}
+                    </span>
+                  )}
+                  {match.user.interests && match.user.interests.length > 0 && (
+                    <span className='px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full'>
+                      🎯 {match.user.interests.slice(0, 2).join(", ")}
+                    </span>
+                  )}
+                </div>
 
-                {/* Last Message Preview */}
+                {/* Last Message or Prompt */}
                 {lastMessage ? (
-                  <div className='bg-gray-50 rounded-lg p-3 mb-3'>
+                  <div className='mb-3'>
                     <p className='text-sm text-gray-700 line-clamp-2'>
                       {lastMessage.isFromMe && (
                         <span className='font-medium'>You: </span>
@@ -431,49 +407,6 @@ const MatchesList = () => {
                     </svg>
                   </button>
                 </div>
-
-                {/* Time since match for new matches */}
-                {!lastMessage && (
-                  <div className='mt-3 text-xs text-center'>
-                    <div className='text-gray-500'>
-                      Matched {formatDate(match.matchedAt)}
-                    </div>
-                    {(() => {
-                      const matchDate = new Date(match.matchedAt);
-                      const now = new Date();
-                      const diffHours = Math.floor(
-                        (now - matchDate) / (1000 * 60 * 60)
-                      );
-                      const hoursLeft = 72 - diffHours;
-
-                      if (hoursLeft <= 24) {
-                        const urgencyColor =
-                          hoursLeft <= 6
-                            ? "text-red-600 font-semibold"
-                            : hoursLeft <= 12
-                            ? "text-red-500"
-                            : "text-orange-600";
-
-                        return (
-                          <div className={`mt-1 ${urgencyColor} font-medium`}>
-                            ⏰ Expires in {hoursLeft} hour
-                            {hoursLeft !== 1 ? "s" : ""}
-                            {hoursLeft <= 6 && (
-                              <span className='ml-1 animate-pulse'>🔥</span>
-                            )}
-                          </div>
-                        );
-                      } else if (hoursLeft <= 48) {
-                        return (
-                          <div className='text-orange-600 mt-1 font-medium'>
-                            ⚠️ Expires in {hoursLeft} hours
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </div>
-                )}
               </div>
             </div>
           );
@@ -484,7 +417,7 @@ const MatchesList = () => {
       {showFirstMessagePrompt && selectedMatch && (
         <FirstMessagePrompt
           match={selectedMatch}
-          onMessageSent={handleFirstMessageSent}
+          onSendMessage={handleFirstMessageSent}
           onClose={() => {
             setShowFirstMessagePrompt(false);
             setSelectedMatch(null);

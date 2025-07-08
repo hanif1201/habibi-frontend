@@ -92,35 +92,69 @@ const CardStack = () => {
         // Check if it's a match
         if (response.data.isMatch) {
           const matchData = response.data.match;
-          setMatch(matchData);
+
+          // Enhanced match data structure with all new fields
+          const enhancedMatchData = {
+            ...matchData,
+            // Ensure we have all the enhanced fields
+            conversationStarters: matchData.conversationStarters || [],
+            urgencyLevel: matchData.urgencyLevel || "normal",
+            timeRemaining: matchData.timeRemaining || null,
+            celebrationData: matchData.celebrationData || {
+              showConfetti: true,
+              animationType: "standard",
+              soundEffect: "match_success",
+            },
+            // Enhanced profile data
+            otherUser: {
+              ...matchData.otherUser,
+              // Ensure complete profile data is included
+              photos: matchData.otherUser.photos || [],
+              primaryPhoto:
+                matchData.otherUser.primaryPhoto ||
+                matchData.otherUser.photos?.[0],
+              bio: matchData.otherUser.bio || "",
+              age: matchData.otherUser.age || "",
+              distance: matchData.otherUser.distance || null,
+              interests: matchData.otherUser.interests || [],
+              occupation: matchData.otherUser.occupation || "",
+              education: matchData.otherUser.education || "",
+              location: matchData.otherUser.location || "",
+              // Add any other profile fields that might be useful
+            },
+          };
+
+          setMatch(enhancedMatchData);
           setShowMatchModal(true);
 
           // Real-time socket notification if matched user is online
           if (
             socket &&
             isUserOnline &&
-            matchData.otherUser?._id &&
-            isUserOnline(matchData.otherUser._id)
+            enhancedMatchData.otherUser?._id &&
+            isUserOnline(enhancedMatchData.otherUser._id)
           ) {
-            socket.emit("new_match", matchData);
+            socket.emit("new_match", enhancedMatchData);
           }
 
           // Send new match notifications (non-blocking)
           try {
             // Show local notification
-            await notificationService.handleNewMatch(matchData);
+            await notificationService.handleNewMatch(enhancedMatchData);
 
             // Send email notification
             const shouldSendEmail =
               await emailService.shouldSendNewMatchEmail();
             if (shouldSendEmail) {
               // Send email in background - don't wait for it
-              emailService.sendNewMatchEmail(matchData).catch((error) => {
-                console.warn(
-                  "Email notification failed (non-critical):",
-                  error
-                );
-              });
+              emailService
+                .sendNewMatchEmail(enhancedMatchData)
+                .catch((error) => {
+                  console.warn(
+                    "Email notification failed (non-critical):",
+                    error
+                  );
+                });
             }
           } catch (error) {
             console.warn("Failed to send match notifications:", error);

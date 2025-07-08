@@ -335,18 +335,53 @@ export const ChatProvider = ({ children }) => {
   const handleNewMatch = useCallback((matchData) => {
     console.log("💖 New match received via socket:", matchData);
 
+    // Enhanced match data structure
+    const enhancedMatchData = {
+      ...matchData,
+      // Ensure we have all the enhanced fields
+      conversationStarters: matchData.conversationStarters || [],
+      urgencyLevel: matchData.urgencyLevel || "normal",
+      timeRemaining: matchData.timeRemaining || null,
+      celebrationData: matchData.celebrationData || {
+        showConfetti: true,
+        animationType: "standard",
+        soundEffect: "match_success",
+      },
+      // Enhanced profile data
+      otherUser: {
+        ...matchData.otherUser,
+        // Ensure complete profile data is included
+        photos: matchData.otherUser.photos || [],
+        primaryPhoto:
+          matchData.otherUser.primaryPhoto || matchData.otherUser.photos?.[0],
+        bio: matchData.otherUser.bio || "",
+        age: matchData.otherUser.age || "",
+        distance: matchData.otherUser.distance || null,
+        interests: matchData.otherUser.interests || [],
+        occupation: matchData.otherUser.occupation || "",
+        education: matchData.otherUser.education || "",
+        location: matchData.otherUser.location || "",
+      },
+    };
+
     // Update conversations list with new match
     setConversations((prev) => {
       const newConversation = {
-        matchId: matchData._id,
-        user: matchData.otherUser,
-        matchedAt: matchData.createdAt,
+        matchId: enhancedMatchData._id,
+        user: enhancedMatchData.otherUser,
+        matchedAt: enhancedMatchData.createdAt || enhancedMatchData.matchedAt,
         lastMessage: null,
         unreadCount: 0,
+        // Include enhanced match data
+        urgencyLevel: enhancedMatchData.urgencyLevel,
+        timeRemaining: enhancedMatchData.timeRemaining,
+        conversationStarters: enhancedMatchData.conversationStarters,
       };
 
       // Check if conversation already exists
-      const exists = prev.some((conv) => conv.matchId === matchData._id);
+      const exists = prev.some(
+        (conv) => conv.matchId === enhancedMatchData._id
+      );
       if (exists) return prev;
 
       // Add to beginning of list
@@ -356,7 +391,7 @@ export const ChatProvider = ({ children }) => {
     // Show match notification
     if (Notification.permission === "granted") {
       new Notification("💖 New Match!", {
-        body: `You and ${matchData.otherUser.firstName} liked each other!`,
+        body: `You and ${enhancedMatchData.otherUser.firstName} liked each other!`,
         icon: "/logo192.png",
         tag: "new-match",
         requireInteraction: true,
@@ -364,7 +399,7 @@ export const ChatProvider = ({ children }) => {
     }
 
     // Emit custom event for components to listen to
-    const event = new CustomEvent("newMatch", { detail: matchData });
+    const event = new CustomEvent("newMatch", { detail: enhancedMatchData });
     window.dispatchEvent(event);
   }, []);
 
