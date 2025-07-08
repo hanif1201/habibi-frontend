@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useChat } from "../../context/ChatContext";
 import axios from "axios";
+import emailService from "../../services/EmailService";
 
 const MatchModal = ({ match, onClose }) => {
   const { user } = useAuth();
@@ -16,11 +17,30 @@ const MatchModal = ({ match, onClose }) => {
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
-  // Animation trigger
+  // Animation trigger and email notification
   useEffect(() => {
     const timer = setTimeout(() => setShowModal(true), 100);
+
+    // Send new match email notification if not already sent
+    const sendEmailNotification = async () => {
+      try {
+        const shouldSendEmail = await emailService.shouldSendNewMatchEmail();
+        if (shouldSendEmail) {
+          // Send email in background - don't wait for it
+          emailService.sendNewMatchEmail(match).catch((error) => {
+            console.warn("Email notification failed (non-critical):", error);
+          });
+        }
+      } catch (error) {
+        console.warn("Failed to check email preferences:", error);
+        // Continue with match flow even if email check fails
+      }
+    };
+
+    sendEmailNotification();
+
     return () => clearTimeout(timer);
-  }, []);
+  }, [match]);
 
   // Ice breaker templates
   const iceBreakers = [

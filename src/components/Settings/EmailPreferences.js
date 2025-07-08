@@ -1,6 +1,6 @@
 // src/components/Settings/EmailPreferences.js
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import emailService from "../../services/EmailService";
 
 const EmailPreferences = ({ onClose }) => {
   const [preferences, setPreferences] = useState({
@@ -19,8 +19,6 @@ const EmailPreferences = ({ onClose }) => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
-
   useEffect(() => {
     loadEmailPreferences();
   }, []);
@@ -28,11 +26,8 @@ const EmailPreferences = ({ onClose }) => {
   const loadEmailPreferences = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_URL}/auth/email-preferences`);
-
-      if (response.data.success) {
-        setPreferences(response.data.preferences);
-      }
+      const preferences = await emailService.getEmailPreferences();
+      setPreferences(preferences);
     } catch (error) {
       console.error("Error loading email preferences:", error);
       setError("Failed to load email preferences");
@@ -46,19 +41,15 @@ const EmailPreferences = ({ onClose }) => {
       setSaving(true);
       setError("");
 
-      const response = await axios.put(`${API_URL}/auth/email-preferences`, {
-        preferences,
-      });
+      const success = await emailService.updateEmailPreferences(preferences);
 
-      if (response.data.success) {
+      if (success) {
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
       }
     } catch (error) {
       console.error("Error saving email preferences:", error);
-      setError(
-        error.response?.data?.message || "Failed to save email preferences"
-      );
+      setError(error.message || "Failed to save email preferences");
     } finally {
       setSaving(false);
     }
@@ -69,6 +60,23 @@ const EmailPreferences = ({ onClose }) => {
       ...prev,
       [key]: value,
     }));
+  };
+
+  const handleTestEmail = async () => {
+    try {
+      setLoading(true);
+      const success = await emailService.sendTestEmail("new-match");
+      if (success) {
+        alert("Test email sent successfully! Check your inbox.");
+      } else {
+        alert("Failed to send test email. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error sending test email:", error);
+      alert("Failed to send test email. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const emailCategories = [
@@ -330,20 +338,13 @@ const EmailPreferences = ({ onClose }) => {
           </div>
 
           {/* Action Buttons */}
-          <div className='flex justify-end space-x-3 mt-6 pt-4 border-t'>
+          <div className='flex justify-between items-center mt-6 pt-4 border-t'>
             <button
-              onClick={onClose}
-              className='px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors'
-              disabled={saving}
+              onClick={handleTestEmail}
+              disabled={loading}
+              className='px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center'
             >
-              Cancel
-            </button>
-            <button
-              onClick={saveEmailPreferences}
-              disabled={saving}
-              className='px-6 py-2 bg-gradient-to-r from-pink-500 to-red-500 text-white rounded-lg hover:from-pink-600 hover:to-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center'
-            >
-              {saving ? (
+              {loading ? (
                 <>
                   <svg
                     className='animate-spin -ml-1 mr-2 h-4 w-4 text-white'
@@ -365,12 +366,70 @@ const EmailPreferences = ({ onClose }) => {
                       d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
                     />
                   </svg>
-                  Saving...
+                  Sending...
                 </>
               ) : (
-                "Save Preferences"
+                <>
+                  <svg
+                    className='w-4 h-4 mr-2'
+                    fill='none'
+                    stroke='currentColor'
+                    viewBox='0 0 24 24'
+                  >
+                    <path
+                      strokeLinecap='round'
+                      strokeLinejoin='round'
+                      strokeWidth={2}
+                      d='M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
+                    />
+                  </svg>
+                  Send Test Email
+                </>
               )}
             </button>
+
+            <div className='flex space-x-3'>
+              <button
+                onClick={onClose}
+                className='px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors'
+                disabled={saving}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveEmailPreferences}
+                disabled={saving}
+                className='px-6 py-2 bg-gradient-to-r from-pink-500 to-red-500 text-white rounded-lg hover:from-pink-600 hover:to-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center'
+              >
+                {saving ? (
+                  <>
+                    <svg
+                      className='animate-spin -ml-1 mr-2 h-4 w-4 text-white'
+                      xmlns='http://www.w3.org/2000/svg'
+                      fill='none'
+                      viewBox='0 0 24 24'
+                    >
+                      <circle
+                        className='opacity-25'
+                        cx='12'
+                        cy='12'
+                        r='10'
+                        stroke='currentColor'
+                        strokeWidth='4'
+                      />
+                      <path
+                        className='opacity-75'
+                        fill='currentColor'
+                        d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
+                      />
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  "Save Preferences"
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>

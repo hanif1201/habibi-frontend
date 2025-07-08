@@ -1,238 +1,184 @@
+// src/components/Debug.js
 import React, { useState } from "react";
-import axios from "axios";
+import emailService from "../services/EmailService";
+import notificationService from "../services/NotificationService";
 
 const Debug = () => {
-  const [cloudinaryTest, setCloudinaryTest] = useState(null);
-  const [envTest, setEnvTest] = useState(null);
-  const [matchingTest, setMatchingTest] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState([]);
 
-  const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+  const addResult = (message, type = "info") => {
+    setResults((prev) => [
+      ...prev,
+      { message, type, timestamp: new Date().toLocaleTimeString() },
+    ]);
+  };
 
-  const testCloudinary = async () => {
+  const clearResults = () => {
+    setResults([]);
+  };
+
+  const testNewMatchEmail = async () => {
     setLoading(true);
+    addResult("Testing new match email...", "info");
+
     try {
-      const response = await axios.get(`${API_URL}/debug/cloudinary`);
-      setCloudinaryTest(response.data);
+      // Create mock match data
+      const mockMatch = {
+        _id: "test-match-id",
+        otherUser: {
+          _id: "other-user-id",
+          firstName: "Test User",
+          lastName: "Example",
+          age: 25,
+          photos: [
+            {
+              url: "https://via.placeholder.com/300x400",
+              isPrimary: true,
+            },
+          ],
+        },
+        matchedAt: new Date().toISOString(),
+      };
+
+      const success = await emailService.sendNewMatchEmail(mockMatch);
+
+      if (success) {
+        addResult("✅ New match email sent successfully!", "success");
+      } else {
+        addResult("❌ Failed to send new match email", "error");
+      }
     } catch (error) {
-      setCloudinaryTest({
-        success: false,
-        error: error.response?.data || error.message,
-      });
+      addResult(`❌ Error: ${error.message}`, "error");
     } finally {
       setLoading(false);
     }
   };
 
-  const testEnv = async () => {
+  const testEmailPreferences = async () => {
     setLoading(true);
+    addResult("Testing email preferences...", "info");
+
     try {
-      const response = await axios.get(`${API_URL}/debug/env`);
-      setEnvTest(response.data);
+      const preferences = await emailService.getEmailPreferences();
+      addResult(
+        `✅ Email preferences loaded: ${JSON.stringify(preferences, null, 2)}`,
+        "success"
+      );
     } catch (error) {
-      setEnvTest({
-        success: false,
-        error: error.response?.data || error.message,
-      });
+      addResult(`❌ Error: ${error.message}`, "error");
     } finally {
       setLoading(false);
     }
   };
 
-  const testMatching = async () => {
+  const testNotificationService = async () => {
     setLoading(true);
+    addResult("Testing notification service...", "info");
+
     try {
-      const response = await axios.get(`${API_URL}/debug/matching`);
-      setMatchingTest(response.data);
+      const mockMatch = {
+        _id: "test-match-id",
+        otherUser: {
+          firstName: "Test User",
+        },
+      };
+
+      const success = await notificationService.handleNewMatch(mockMatch);
+
+      if (success) {
+        addResult("✅ Notification service test successful!", "success");
+      } else {
+        addResult("❌ Notification service test failed", "error");
+      }
     } catch (error) {
-      setMatchingTest({
-        success: false,
-        error: error.response?.data || error.message,
-      });
+      addResult(`❌ Error: ${error.message}`, "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const testLocalNotification = () => {
+    addResult("Testing local notification...", "info");
+
+    try {
+      notificationService.showLocalNotification("Test Notification", {
+        body: "This is a test notification from the debug panel",
+        icon: "/logo192.png",
+        tag: "debug-test",
+      });
+      addResult("✅ Local notification sent!", "success");
+    } catch (error) {
+      addResult(`❌ Error: ${error.message}`, "error");
     }
   };
 
   return (
-    <div className='max-w-6xl mx-auto p-6'>
-      <h2 className='text-2xl font-bold mb-6'>Debug Dashboard</h2>
-
-      <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
-        {/* Environment Variables Test */}
-        <div className='bg-white rounded-lg shadow p-6'>
-          <h3 className='text-lg font-semibold mb-4'>Environment Variables</h3>
-          <button
-            onClick={testEnv}
-            disabled={loading}
-            className='bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 disabled:opacity-50 mb-4'
-          >
-            {loading ? "Testing..." : "Test Environment"}
-          </button>
-
-          {envTest && (
-            <div className='bg-gray-50 p-4 rounded'>
-              <pre className='text-sm overflow-auto'>
-                {JSON.stringify(envTest, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
-
-        {/* Cloudinary Test */}
-        <div className='bg-white rounded-lg shadow p-6'>
-          <h3 className='text-lg font-semibold mb-4'>Cloudinary Connection</h3>
-          <button
-            onClick={testCloudinary}
-            disabled={loading}
-            className='bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 disabled:opacity-50 mb-4'
-          >
-            {loading ? "Testing..." : "Test Cloudinary"}
-          </button>
-
-          {cloudinaryTest && (
-            <div className='bg-gray-50 p-4 rounded'>
-              <div
-                className={`mb-2 font-semibold ${
-                  cloudinaryTest.success ? "text-green-600" : "text-red-600"
-                }`}
-              >
-                {cloudinaryTest.success ? "SUCCESS" : "FAILED"}
-              </div>
-              <pre className='text-sm overflow-auto'>
-                {JSON.stringify(cloudinaryTest, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
-
-        {/* Matching System Test */}
-        <div className='bg-white rounded-lg shadow p-6'>
-          <h3 className='text-lg font-semibold mb-4'>Matching System</h3>
-          <button
-            onClick={testMatching}
-            disabled={loading}
-            className='bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 disabled:opacity-50 mb-4'
-          >
-            {loading ? "Testing..." : "Test Matching"}
-          </button>
-
-          {matchingTest && (
-            <div className='bg-gray-50 p-4 rounded'>
-              <div
-                className={`mb-2 font-semibold ${
-                  matchingTest.success ? "text-green-600" : "text-red-600"
-                }`}
-              >
-                {matchingTest.success ? "SUCCESS" : "FAILED"}
-              </div>
-              <pre className='text-sm overflow-auto'>
-                {JSON.stringify(matchingTest, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Simple Upload Test */}
-      <div className='bg-white rounded-lg shadow p-6 mt-6'>
-        <h3 className='text-lg font-semibold mb-4'>Simple Upload Test</h3>
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const fileInput = e.target.photo;
-            if (!fileInput.files[0]) {
-              alert("Please select a file");
-              return;
-            }
-
-            const formData = new FormData();
-            formData.append("photo", fileInput.files[0]);
-
-            try {
-              setLoading(true);
-              const response = await axios.post(
-                `${API_URL}/photos/upload`,
-                formData,
-                {
-                  headers: {
-                    "Content-Type": "multipart/form-data",
-                  },
-                }
-              );
-              alert("Upload successful!");
-              console.log("Upload response:", response.data);
-            } catch (error) {
-              alert(
-                "Upload failed: " +
-                  (error.response?.data?.message || error.message)
-              );
-              console.error("Upload error:", error);
-            } finally {
-              setLoading(false);
-            }
-          }}
+    <div className='fixed bottom-4 right-4 bg-white rounded-lg shadow-lg border p-4 w-96 max-h-96 overflow-hidden'>
+      <div className='flex justify-between items-center mb-4'>
+        <h3 className='text-lg font-semibold text-gray-900'>Debug Panel</h3>
+        <button
+          onClick={clearResults}
+          className='text-sm text-gray-500 hover:text-gray-700'
         >
-          <div className='mb-4'>
-            <label className='block text-sm font-medium text-gray-700 mb-2'>
-              Select Image File
-            </label>
-            <input
-              type='file'
-              name='photo'
-              accept='image/*'
-              className='w-full p-2 border border-gray-300 rounded'
-            />
-          </div>
-          <button
-            type='submit'
-            disabled={loading}
-            className='bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600 disabled:opacity-50'
-          >
-            {loading ? "Uploading..." : "Test Upload"}
-          </button>
-        </form>
+          Clear
+        </button>
       </div>
 
-      {/* API Tests */}
-      <div className='bg-white rounded-lg shadow p-6 mt-6'>
-        <h3 className='text-lg font-semibold mb-4'>API Endpoint Tests</h3>
-        <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-          <button
-            onClick={async () => {
-              try {
-                const response = await axios.get(`${API_URL}/matching/stats`);
-                alert(
-                  "Stats API working: " + JSON.stringify(response.data.stats)
-                );
-              } catch (error) {
-                alert("Stats API failed: " + error.message);
-              }
-            }}
-            className='bg-indigo-500 text-white px-4 py-2 rounded hover:bg-indigo-600'
-          >
-            Test Stats API
-          </button>
+      <div className='space-y-2 mb-4'>
+        <button
+          onClick={testNewMatchEmail}
+          disabled={loading}
+          className='w-full px-3 py-2 bg-blue-500 text-white rounded text-sm hover:bg-blue-600 disabled:opacity-50'
+        >
+          Test New Match Email
+        </button>
 
-          <button
-            onClick={async () => {
-              try {
-                const response = await axios.get(
-                  `${API_URL}/matching/discover`
-                );
-                alert(
-                  "Discovery API working: Found " +
-                    response.data.users.length +
-                    " users"
-                );
-              } catch (error) {
-                alert("Discovery API failed: " + error.message);
-              }
-            }}
-            className='bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600'
-          >
-            Test Discovery API
-          </button>
+        <button
+          onClick={testEmailPreferences}
+          disabled={loading}
+          className='w-full px-3 py-2 bg-green-500 text-white rounded text-sm hover:bg-green-600 disabled:opacity-50'
+        >
+          Test Email Preferences
+        </button>
+
+        <button
+          onClick={testNotificationService}
+          disabled={loading}
+          className='w-full px-3 py-2 bg-purple-500 text-white rounded text-sm hover:bg-purple-600 disabled:opacity-50'
+        >
+          Test Notification Service
+        </button>
+
+        <button
+          onClick={testLocalNotification}
+          disabled={loading}
+          className='w-full px-3 py-2 bg-orange-500 text-white rounded text-sm hover:bg-orange-600 disabled:opacity-50'
+        >
+          Test Local Notification
+        </button>
+      </div>
+
+      <div className='bg-gray-100 rounded p-2 max-h-48 overflow-y-auto'>
+        <div className='text-xs font-mono space-y-1'>
+          {results.map((result, index) => (
+            <div
+              key={index}
+              className={`${
+                result.type === "success"
+                  ? "text-green-600"
+                  : result.type === "error"
+                  ? "text-red-600"
+                  : "text-gray-600"
+              }`}
+            >
+              <span className='text-gray-400'>[{result.timestamp}]</span>{" "}
+              {result.message}
+            </div>
+          ))}
+          {results.length === 0 && (
+            <div className='text-gray-400'>No test results yet...</div>
+          )}
         </div>
       </div>
     </div>

@@ -14,6 +14,7 @@ import SafetyCenter from "./Safety/SafetyCenter";
 import NotificationSettings from "./Notifications/NotificationSettings";
 import notificationService from "../services/NotificationService";
 import EmailPreferences from "./Settings/EmailPreferences";
+import Debug from "./Debug";
 import axios from "axios";
 
 const Dashboard = () => {
@@ -1319,6 +1320,9 @@ const Dashboard = () => {
       {showEmailPreferences && (
         <EmailPreferences onClose={() => setShowEmailPreferences(false)} />
       )}
+
+      {/* Debug Panel - Only show in development */}
+      {process.env.NODE_ENV === "development" && <Debug />}
     </div>
   );
 

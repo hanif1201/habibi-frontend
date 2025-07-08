@@ -186,6 +186,29 @@ class NotificationService {
     }
   }
 
+  // Handle new match notification (both push and email)
+  async handleNewMatch(matchData) {
+    try {
+      // Show local notification if permission granted
+      if (this.permission === "granted") {
+        this.showLocalNotification("💖 New Match!", {
+          body: `You and ${matchData.otherUser.firstName} liked each other!`,
+          icon: "/logo192.png",
+          tag: "new-match",
+          requireInteraction: true,
+        });
+      }
+
+      // Note: Email notification is handled separately by EmailService
+      // to maintain separation of concerns and allow independent error handling
+
+      return true;
+    } catch (error) {
+      console.error("Failed to handle new match notification:", error);
+      return false;
+    }
+  }
+
   // Update notification preferences
   async updatePreferences(preferences) {
     const token = localStorage.getItem("habibi_token");

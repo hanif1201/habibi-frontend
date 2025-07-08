@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import UserCard from "./UserCard";
 import MatchModal from "./MatchModal";
+import emailService from "../../services/EmailService";
+import notificationService from "../../services/NotificationService";
 
 const CardStack = () => {
   const [users, setUsers] = useState([]);
@@ -86,8 +88,31 @@ const CardStack = () => {
       if (response.data.success) {
         // Check if it's a match
         if (response.data.isMatch) {
-          setMatch(response.data.match);
+          const matchData = response.data.match;
+          setMatch(matchData);
           setShowMatchModal(true);
+
+          // Send new match notifications (non-blocking)
+          try {
+            // Show local notification
+            await notificationService.handleNewMatch(matchData);
+
+            // Send email notification
+            const shouldSendEmail =
+              await emailService.shouldSendNewMatchEmail();
+            if (shouldSendEmail) {
+              // Send email in background - don't wait for it
+              emailService.sendNewMatchEmail(matchData).catch((error) => {
+                console.warn(
+                  "Email notification failed (non-critical):",
+                  error
+                );
+              });
+            }
+          } catch (error) {
+            console.warn("Failed to send match notifications:", error);
+            // Continue with match flow even if notifications fail
+          }
         }
 
         // Move to next card
