@@ -209,6 +209,87 @@ class NotificationService {
     }
   }
 
+  // Handle progressive expiration warnings
+  async handleMatchExpirationWarning(matchData, hoursLeft, warningType) {
+    try {
+      if (this.permission === "granted") {
+        const notificationConfig = this.getExpirationWarningConfig(
+          hoursLeft,
+          warningType,
+          matchData
+        );
+
+        this.showLocalNotification(notificationConfig.title, {
+          body: notificationConfig.body,
+          icon: "/logo192.png",
+          tag: `expiring-${warningType}`,
+          requireInteraction: notificationConfig.requireInteraction,
+          vibrate: notificationConfig.vibrate,
+        });
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Failed to handle expiration warning notification:", error);
+      return false;
+    }
+  }
+
+  // Get configuration for different expiration warning types
+  getExpirationWarningConfig(hoursLeft, warningType, matchData) {
+    const userName = matchData.otherUser?.firstName || "your match";
+
+    switch (warningType) {
+      case "24h":
+        return {
+          title: "⏰ Match Expires Tomorrow",
+          body: `Your match with ${userName} expires in 24 hours. Send a message to keep the connection!`,
+          requireInteraction: false,
+          vibrate: [200, 100, 200],
+        };
+
+      case "12h":
+        return {
+          title: "⚠️ Match Expires Soon",
+          body: `Your match with ${userName} expires in 12 hours. Don't miss out!`,
+          requireInteraction: false,
+          vibrate: [200, 100, 200, 100, 200],
+        };
+
+      case "6h":
+        return {
+          title: "🚨 Match Expires Today",
+          body: `Your match with ${userName} expires in 6 hours. Time to make a move!`,
+          requireInteraction: true,
+          vibrate: [300, 100, 300, 100, 300],
+        };
+
+      case "2h":
+        return {
+          title: "🔥 URGENT: Match Expires Soon",
+          body: `Your match with ${userName} expires in 2 hours! Send a message now!`,
+          requireInteraction: true,
+          vibrate: [300, 100, 300, 100, 300],
+        };
+
+      case "1h":
+        return {
+          title: "💥 FINAL WARNING: Match Expires",
+          body: `Your match with ${userName} expires in 1 hour! This is your last chance!`,
+          requireInteraction: true,
+          vibrate: [500, 100, 500, 100, 500, 100, 500],
+        };
+
+      default:
+        return {
+          title: "⏰ Match Expiring Soon",
+          body: `Your match with ${userName} expires in ${hoursLeft} hours`,
+          requireInteraction: false,
+          vibrate: [200, 100, 200],
+        };
+    }
+  }
+
   // Update notification preferences
   async updatePreferences(preferences) {
     const token = localStorage.getItem("habibi_token");

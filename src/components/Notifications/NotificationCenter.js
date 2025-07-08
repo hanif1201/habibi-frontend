@@ -145,6 +145,18 @@ const NotificationCenter = ({ onClose, onMarkAsRead }) => {
         return "⭐";
       case "profile_view":
         return "👀";
+      case "match_expiring_24h":
+        return "⏰";
+      case "match_expiring_12h":
+        return "⚠️";
+      case "match_expiring_6h":
+        return "🚨";
+      case "match_expiring_2h":
+        return "🔥";
+      case "match_expiring_1h":
+        return "💥";
+      case "match_expiring":
+        return "⏰";
       default:
         return "🔔";
     }
@@ -163,6 +175,18 @@ const NotificationCenter = ({ onClose, onMarkAsRead }) => {
         return "bg-yellow-100 text-yellow-800 border-yellow-200";
       case "profile_view":
         return "bg-purple-100 text-purple-800 border-purple-200";
+      case "match_expiring_24h":
+        return "bg-blue-100 text-blue-800 border-blue-200";
+      case "match_expiring_12h":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+      case "match_expiring_6h":
+        return "bg-orange-100 text-orange-800 border-orange-200";
+      case "match_expiring_2h":
+        return "bg-red-100 text-red-800 border-red-200";
+      case "match_expiring_1h":
+        return "bg-red-200 text-red-900 border-red-300";
+      case "match_expiring":
+        return "bg-red-100 text-red-800 border-red-200";
       default:
         return "bg-gray-100 text-gray-800 border-gray-200";
     }

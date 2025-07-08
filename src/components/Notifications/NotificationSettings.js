@@ -15,6 +15,12 @@ const NotificationSettings = ({ onClose }) => {
     superLikes: true,
     profileViews: false,
     matchExpiring: true,
+    // Progressive expiration warnings
+    expiring24h: true,
+    expiring12h: true,
+    expiring6h: true,
+    expiring2h: true,
+    expiring1h: true,
     email: true,
     push: true,
     inApp: true,
@@ -365,6 +371,65 @@ const NotificationSettings = ({ onClose }) => {
                   }
                   disabled={!isSubscribed}
                 />
+
+                <div className='border-t pt-4 mt-4'>
+                  <h5 className='text-sm font-medium text-gray-900 mb-3'>
+                    Progressive Expiration Warnings
+                  </h5>
+                  <p className='text-xs text-gray-600 mb-3'>
+                    Get notified at different intervals before matches expire
+                  </p>
+
+                  <PreferenceToggle
+                    label='24 Hours Before'
+                    description='Gentle reminder when match expires tomorrow'
+                    checked={preferences.expiring24h}
+                    onChange={(value) =>
+                      handlePreferenceChange("expiring24h", value)
+                    }
+                    disabled={!isSubscribed}
+                  />
+
+                  <PreferenceToggle
+                    label='12 Hours Before'
+                    description='Early warning when match expires soon'
+                    checked={preferences.expiring12h}
+                    onChange={(value) =>
+                      handlePreferenceChange("expiring12h", value)
+                    }
+                    disabled={!isSubscribed}
+                  />
+
+                  <PreferenceToggle
+                    label='6 Hours Before'
+                    description='Urgent reminder when match expires today'
+                    checked={preferences.expiring6h}
+                    onChange={(value) =>
+                      handlePreferenceChange("expiring6h", value)
+                    }
+                    disabled={!isSubscribed}
+                  />
+
+                  <PreferenceToggle
+                    label='2 Hours Before'
+                    description='Critical warning when match expires soon'
+                    checked={preferences.expiring2h}
+                    onChange={(value) =>
+                      handlePreferenceChange("expiring2h", value)
+                    }
+                    disabled={!isSubscribed}
+                  />
+
+                  <PreferenceToggle
+                    label='1 Hour Before'
+                    description='Final warning when match expires'
+                    checked={preferences.expiring1h}
+                    onChange={(value) =>
+                      handlePreferenceChange("expiring1h", value)
+                    }
+                    disabled={!isSubscribed}
+                  />
+                </div>
 
                 <div className='border-t pt-4 mt-6'>
                   <h4 className='text-md font-medium text-gray-900 mb-3'>

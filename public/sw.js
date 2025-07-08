@@ -78,6 +78,48 @@ self.addEventListener("push", (event) => {
         notificationData.requireInteraction = true;
         break;
 
+      case "match_expiring_24h":
+        notificationData.title = "⏰ Match Expires Tomorrow";
+        notificationData.body = `Your match with ${notificationData.userName} expires in 24 hours. Send a message to keep the connection!`;
+        notificationData.data.url = "/chat";
+        notificationData.tag = "expiring-24h";
+        notificationData.requireInteraction = false;
+        break;
+
+      case "match_expiring_12h":
+        notificationData.title = "⚠️ Match Expires Soon";
+        notificationData.body = `Your match with ${notificationData.userName} expires in 12 hours. Don't miss out!`;
+        notificationData.data.url = "/chat";
+        notificationData.tag = "expiring-12h";
+        notificationData.requireInteraction = false;
+        break;
+
+      case "match_expiring_6h":
+        notificationData.title = "🚨 Match Expires Today";
+        notificationData.body = `Your match with ${notificationData.userName} expires in 6 hours. Time to make a move!`;
+        notificationData.data.url = "/chat";
+        notificationData.tag = "expiring-6h";
+        notificationData.requireInteraction = true;
+        break;
+
+      case "match_expiring_2h":
+        notificationData.title = "🔥 URGENT: Match Expires Soon";
+        notificationData.body = `Your match with ${notificationData.userName} expires in 2 hours! Send a message now!`;
+        notificationData.data.url = "/chat";
+        notificationData.tag = "expiring-2h";
+        notificationData.requireInteraction = true;
+        notificationData.vibrate = [300, 100, 300, 100, 300];
+        break;
+
+      case "match_expiring_1h":
+        notificationData.title = "💥 FINAL WARNING: Match Expires";
+        notificationData.body = `Your match with ${notificationData.userName} expires in 1 hour! This is your last chance!`;
+        notificationData.data.url = "/chat";
+        notificationData.tag = "expiring-1h";
+        notificationData.requireInteraction = true;
+        notificationData.vibrate = [500, 100, 500, 100, 500, 100, 500];
+        break;
+
       case "match_expiring":
         notificationData.title = "⏰ Match Expiring Soon";
         notificationData.body = `Your match with ${notificationData.userName} expires in ${notificationData.timeLeft}`;

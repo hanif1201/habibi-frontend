@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import emailService from "../services/EmailService";
 import notificationService from "../services/NotificationService";
+import ExpirationWarningTest from "./Debug/ExpirationWarningTest";
 
 const Debug = () => {
   const [loading, setLoading] = useState(false);
@@ -113,6 +114,8 @@ const Debug = () => {
     }
   };
 
+  const [showExpirationTest, setShowExpirationTest] = useState(false);
+
   return (
     <div className='fixed bottom-4 right-4 bg-white rounded-lg shadow-lg border p-4 w-96 max-h-96 overflow-hidden'>
       <div className='flex justify-between items-center mb-4'>
@@ -157,6 +160,13 @@ const Debug = () => {
         >
           Test Local Notification
         </button>
+
+        <button
+          onClick={() => setShowExpirationTest(!showExpirationTest)}
+          className='w-full px-3 py-2 bg-red-500 text-white rounded text-sm hover:bg-red-600'
+        >
+          {showExpirationTest ? "Hide" : "Show"} Expiration Test
+        </button>
       </div>
 
       <div className='bg-gray-100 rounded p-2 max-h-48 overflow-y-auto'>
@@ -181,6 +191,12 @@ const Debug = () => {
           )}
         </div>
       </div>
+
+      {showExpirationTest && (
+        <div className='mt-4 border-t pt-4'>
+          <ExpirationWarningTest />
+        </div>
+      )}
     </div>
   );
 };

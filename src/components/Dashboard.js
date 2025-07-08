@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useChat } from "../context/ChatContext";
 import { useNavigate } from "react-router-dom";
+import { useExpirationWarnings } from "../hooks/useExpirationWarnings";
 import ProfileCompletion from "./Profile/ProfileCompletion";
 import ProfileEdit from "./Profile/ProfileEdit";
 import PhotoUpload from "./Profile/PhotoUpload";
@@ -14,6 +15,7 @@ import SafetyCenter from "./Safety/SafetyCenter";
 import NotificationSettings from "./Notifications/NotificationSettings";
 import notificationService from "../services/NotificationService";
 import EmailPreferences from "./Settings/EmailPreferences";
+import ExpiringMatchesAlert from "./Matching/ExpiringMatchesAlert";
 import Debug from "./Debug";
 import axios from "axios";
 
@@ -40,8 +42,25 @@ const Dashboard = () => {
   const [notificationPermission, setNotificationPermission] =
     useState("default");
   const [recentNotifications, setRecentNotifications] = useState([]);
+  const [matches, setMatches] = useState([]);
+  const [showExpiringAlert, setShowExpiringAlert] = useState(true);
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+
+  // Initialize expiration warnings
+  const { getExpiringSoonMatches } = useExpirationWarnings(matches);
+
+  // Load matches for expiration tracking
+  const loadMatches = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/matching/matches`);
+      if (response.data.success) {
+        setMatches(response.data.matches || []);
+      }
+    } catch (error) {
+      console.error("Failed to load matches:", error);
+    }
+  };
 
   // Initialize notifications on mount
   useEffect(() => {
@@ -102,6 +121,9 @@ const Dashboard = () => {
 
         // Load recent notifications
         loadRecentNotifications();
+
+        // Load matches for expiration tracking
+        loadMatches();
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
         setError("Failed to load dashboard data. Please refresh the page.");
@@ -478,6 +500,14 @@ const Dashboard = () => {
             profileCompletion={profileCompletion}
             onOpenEdit={() => setShowProfileEdit(true)}
             onOpenPhotoUpload={() => setShowPhotoUpload(true)}
+          />
+        )}
+
+        {/* Expiring Matches Alert */}
+        {showExpiringAlert && (
+          <ExpiringMatchesAlert
+            expiringMatches={getExpiringSoonMatches()}
+            onClose={() => setShowExpiringAlert(false)}
           />
         )}
 
@@ -1335,6 +1365,11 @@ const Dashboard = () => {
       super_like: "⭐",
       profile_view: "👀",
       match_expiring: "⏰",
+      match_expiring_24h: "⏰",
+      match_expiring_12h: "⚠️",
+      match_expiring_6h: "🚨",
+      match_expiring_2h: "🔥",
+      match_expiring_1h: "💥",
       welcome: "🎉",
       test: "🧪",
       system: "⚙️",

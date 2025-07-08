@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useChat } from "../../context/ChatContext";
+import { useExpirationWarnings } from "../../hooks/useExpirationWarnings";
 import FirstMessagePrompt from "./FirstMessagePrompt";
 
 const MatchesList = () => {
@@ -12,6 +13,9 @@ const MatchesList = () => {
   const [selectedMatch, setSelectedMatch] = useState(null);
   const { setCurrentConversation, conversations } = useChat();
   const navigate = useNavigate();
+
+  // Initialize expiration warnings
+  const { getExpiringSoonMatches } = useExpirationWarnings(matches);
 
   const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
@@ -144,24 +148,49 @@ const MatchesList = () => {
       const matchDate = new Date(match.matchedAt);
       const now = new Date();
       const diffHours = Math.floor((now - matchDate) / (1000 * 60 * 60));
+      const hoursLeft = 72 - diffHours;
 
       if (diffHours < 24) {
         return {
           type: "new",
           text: "New Match! Start the conversation",
           color: "bg-green-100 text-green-800 border-green-200",
+          urgency: "low",
         };
-      } else if (diffHours < 72) {
+      } else if (hoursLeft > 48) {
         return {
           type: "pending",
           text: "Say hello before it expires!",
           color: "bg-yellow-100 text-yellow-800 border-yellow-200",
+          urgency: "medium",
+        };
+      } else if (hoursLeft > 24) {
+        return {
+          type: "expiring-soon",
+          text: `Expires in ${hoursLeft}h`,
+          color: "bg-orange-100 text-orange-800 border-orange-200",
+          urgency: "high",
+        };
+      } else if (hoursLeft > 12) {
+        return {
+          type: "expiring-urgent",
+          text: `Expires in ${hoursLeft}h`,
+          color: "bg-red-100 text-red-800 border-red-200",
+          urgency: "critical",
+        };
+      } else if (hoursLeft > 6) {
+        return {
+          type: "expiring-critical",
+          text: `Expires in ${hoursLeft}h`,
+          color: "bg-red-200 text-red-900 border-red-300",
+          urgency: "emergency",
         };
       } else {
         return {
-          type: "expiring",
-          text: "Match expires soon!",
-          color: "bg-red-100 text-red-800 border-red-200",
+          type: "expiring-final",
+          text: `Expires in ${hoursLeft}h`,
+          color: "bg-red-300 text-red-900 border-red-400 animate-pulse",
+          urgency: "final",
         };
       }
     } else if (unreadCount > 0) {
@@ -169,12 +198,14 @@ const MatchesList = () => {
         type: "unread",
         text: `${unreadCount} new message${unreadCount > 1 ? "s" : ""}`,
         color: "bg-blue-100 text-blue-800 border-blue-200",
+        urgency: "low",
       };
     } else {
       return {
         type: "active",
         text: "Active conversation",
         color: "bg-gray-100 text-gray-800 border-gray-200",
+        urgency: "low",
       };
     }
   };
@@ -251,6 +282,17 @@ const MatchesList = () => {
           <p className='text-gray-600 text-sm mt-1'>
             {matches.filter((m) => !getLastMessage(m._id)).length} new
             conversations to start
+            {(() => {
+              const expiringSoon = getExpiringSoonMatches();
+              if (expiringSoon.length > 0) {
+                return (
+                  <span className='ml-2 text-orange-600 font-medium'>
+                    • {expiringSoon.length} expiring soon
+                  </span>
+                );
+              }
+              return null;
+            })()}
           </p>
         </div>
         <button
@@ -392,19 +434,43 @@ const MatchesList = () => {
 
                 {/* Time since match for new matches */}
                 {!lastMessage && (
-                  <div className='mt-3 text-xs text-gray-500 text-center'>
-                    Matched {formatDate(match.matchedAt)}
+                  <div className='mt-3 text-xs text-center'>
+                    <div className='text-gray-500'>
+                      Matched {formatDate(match.matchedAt)}
+                    </div>
                     {(() => {
                       const matchDate = new Date(match.matchedAt);
                       const now = new Date();
                       const diffHours = Math.floor(
                         (now - matchDate) / (1000 * 60 * 60)
                       );
+                      const hoursLeft = 72 - diffHours;
 
-                      if (diffHours >= 48) {
-                        return " • Expires in " + (72 - diffHours) + " hours";
+                      if (hoursLeft <= 24) {
+                        const urgencyColor =
+                          hoursLeft <= 6
+                            ? "text-red-600 font-semibold"
+                            : hoursLeft <= 12
+                            ? "text-red-500"
+                            : "text-orange-600";
+
+                        return (
+                          <div className={`mt-1 ${urgencyColor} font-medium`}>
+                            ⏰ Expires in {hoursLeft} hour
+                            {hoursLeft !== 1 ? "s" : ""}
+                            {hoursLeft <= 6 && (
+                              <span className='ml-1 animate-pulse'>🔥</span>
+                            )}
+                          </div>
+                        );
+                      } else if (hoursLeft <= 48) {
+                        return (
+                          <div className='text-orange-600 mt-1 font-medium'>
+                            ⚠️ Expires in {hoursLeft} hours
+                          </div>
+                        );
                       }
-                      return "";
+                      return null;
                     })()}
                   </div>
                 )}
