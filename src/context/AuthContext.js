@@ -369,7 +369,6 @@ export const AuthProvider = ({ children }) => {
     loadUser,
     refreshUser,
     checkAuth,
-    authAxios, // Provide the authenticated axios instance
   };
 
   return (
