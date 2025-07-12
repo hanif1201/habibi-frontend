@@ -90,7 +90,8 @@ const authReducer = (state, action) => {
 const AuthContext = createContext();
 
 // API base URL
-const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+const API_URL =
+  process.env.REACT_APP_API_URL || "https://habibi-backend-rajr.onrender.com";
 
 // Token management functions
 const setAuthToken = (token) => {
@@ -160,7 +161,7 @@ export const AuthProvider = ({ children }) => {
       console.log("🔄 Loading user with existing token...");
 
       try {
-        const res = await authAxios.get(`${API_URL}/auth/profile`);
+        const res = await authAxios.get(`${API_URL}/api/auth/profile`);
         console.log("✅ User loaded successfully:", res.data.user?.firstName);
 
         dispatch({
@@ -198,7 +199,7 @@ export const AuthProvider = ({ children }) => {
     console.log("📝 Attempting user registration...");
 
     try {
-      const res = await axios.post(`${API_URL}/auth/register`, userData);
+      const res = await axios.post(`${API_URL}/api/auth/register`, userData);
       console.log("✅ Registration successful:", res.data.user?.firstName);
 
       dispatch({
@@ -231,7 +232,7 @@ export const AuthProvider = ({ children }) => {
     console.log("🔐 Attempting user login...");
 
     try {
-      const res = await axios.post(`${API_URL}/auth/login`, credentials);
+      const res = await axios.post(`${API_URL}/api/auth/login`, credentials);
       console.log("✅ Login successful:", res.data.user?.firstName);
 
       dispatch({
@@ -270,7 +271,10 @@ export const AuthProvider = ({ children }) => {
     console.log("📝 Updating user profile...");
 
     try {
-      const res = await authAxios.put(`${API_URL}/auth/profile`, profileData);
+      const res = await authAxios.put(
+        `${API_URL}/api/auth/profile`,
+        profileData
+      );
       console.log("✅ Profile updated successfully");
 
       dispatch({
@@ -295,7 +299,7 @@ export const AuthProvider = ({ children }) => {
     console.log("🔄 Refreshing user data...");
 
     try {
-      const res = await authAxios.get(`${API_URL}/auth/profile`);
+      const res = await authAxios.get(`${API_URL}/api/auth/profile`);
       console.log("✅ User data refreshed");
 
       dispatch({
