@@ -90,8 +90,7 @@ const authReducer = (state, action) => {
 const AuthContext = createContext();
 
 // API base URL
-const API_URL =
-  process.env.REACT_APP_API_URL || "https://habibi-backend-rajr.onrender.com";
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 // Token management functions
 const setAuthToken = (token) => {
